@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, useWindowDimensions, Text, View, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
 
+import RenderHTML from 'react-native-render-html'; // <-- (সমাধান) এই লাইনটি যোগ করা হয়েছে
 import { useAuth } from '../context/AuthContext'; // <-- AuthContext ইম্পোর্ট করুন
 
 export default function LessonArticleScreen({ route, navigation }) {

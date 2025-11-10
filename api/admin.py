@@ -3,53 +3,44 @@
 from django.contrib import admin
 from .models import (
     Category, Course, Unit, Lesson, 
-    Quiz, Question, Choice
+    Quiz, Question, Choice,
+    UserEnrollment  # <-- এটি ইম্পোর্ট করা আছে
 )
 
 # --- কুইজ সিস্টেমের জন্য অ্যাডভান্সড অ্যাডমিন ---
-# আমাদের পরিকল্পনা অনুযায়ী, আমরা প্রশ্ন ও উত্তরগুলো 
-# সরাসরি কুইজ পেজ থেকেই যোগ করবো।
-
-# ১. Choice-কে Question-এর ভেতরে দেখানোর জন্য
 class ChoiceInline(admin.TabularInline):
     model = Choice
-    extra = 3  # ডিফল্টভাবে ৩টি অপশন দেখানোর বক্স থাকবে
+    extra = 3 
 
-# ২. Question অ্যাডমিন (যাতে ChoiceInline যুক্ত আছে)
 @admin.register(Question)
 class QuestionAdmin(admin.ModelAdmin):
     inlines = [ChoiceInline]
     list_display = ('text', 'quiz', 'points')
     list_filter = ('quiz',)
 
-# ৩. Question-কে Quiz-এর ভেতরে দেখানোর জন্য
 class QuestionInline(admin.StackedInline):
     model = Question
-    inlines = [ChoiceInline] # একটি ইনলাইনের ভেতরে আরেকটি ইনলাইন (নেস্টেড)
-    extra = 1  # ডিফল্টভাবে ১টি প্রশ্ন দেখানোর বক্স থাকবে
+    inlines = [ChoiceInline] 
+    extra = 1 
 
-# ৪. Quiz অ্যাডমিন (যাতে QuestionInline যুক্ত আছে)
 @admin.register(Quiz)
 class QuizAdmin(admin.ModelAdmin):
     inlines = [QuestionInline]
     list_display = ('title', 'quiz_type', 'lesson', 'unit')
     list_filter = ('quiz_type', 'unit__course__category')
     
-    # এই কোডটি অ্যাডমিন প্যানেলকে দ্রুততর করে
     def get_queryset(self, request):
         return super().get_queryset(request).prefetch_related('questions__choices')
 
 # --- অন্যান্য মডেলগুলো রেজিস্ট্রেশন ---
-# আমরা এগুলোকেও ইনলাইন করতে পারি, কিন্তু আপাতত সহজ রাখছি
-
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name',)
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ('title', 'category')
-    list_filter = ('category',)
+    list_display = ('title', 'category', 'is_premium')
+    list_filter = ('category', 'is_premium')
 
 @admin.register(Unit)
 class UnitAdmin(admin.ModelAdmin):
@@ -62,4 +53,12 @@ class LessonAdmin(admin.ModelAdmin):
     list_filter = ('unit__course__category',)
     search_fields = ('title', 'article_body')
 
-# Register your models here.
+
+# --- (এই সেকশনটি পরিবর্তন করা হয়েছে) ---
+@admin.register(UserEnrollment)
+class UserEnrollmentAdmin(admin.ModelAdmin):
+    list_display = ('user', 'course', 'enrolled_at')
+    list_filter = ('course',)
+    
+    # --- (পরিবর্তন) আমরা এখানে ইমেইল দিয়ে সার্চ করার সুবিধা যোগ করেছি ---
+    search_fields = ('user__username', 'user__email', 'course__title')

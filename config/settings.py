@@ -3,22 +3,12 @@
 import os
 from pathlib import Path
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-...' # আপনার আসল কী এখানে থাকবে
-
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
-
 ALLOWED_HOSTS = ['192.168.0.200', 'localhost', '127.0.0.1']
 
-
-# Application definition
+# --- (পরিবর্তিত) Application definition ---
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -38,11 +28,15 @@ INSTALLED_APPS = [
     'django.contrib.sites', 
     'allauth',
     'allauth.account',
-    'allauth.socialaccount',
+    'allauth.socialaccount', # <-- সোশ্যাল লগইনের জন্য
     'dj_rest_auth',
     'dj_rest_auth.registration',
     'rest_framework.authtoken',
+
+    # --- (নতুন) গুগল প্রোভাইডার ---
+    'allauth.socialaccount.providers.google',
 ]
+# ------------------------------------
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -52,13 +46,11 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'allauth.account.middleware.AccountMiddleware', # <-- (allauth-এর মিডলওয়্যার)
+    'allauth.account.middleware.AccountMiddleware', 
 ]
 
 ROOT_URLCONF = 'config.urls'
 
-
-# --- (নতুন) TEMPLATES কনফিগারেশন (Error E403 সমাধান) ---
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -74,10 +66,8 @@ TEMPLATES = [
         },
     },
 ]
-# ----------------------------------------------------
 
 WSGI_APPLICATION = 'config.wsgi.application'
-
 
 # Database
 DATABASES = {
@@ -91,9 +81,7 @@ DATABASES = {
     }
 }
 
-
 # Password validation
-# ... (পাসওয়ার্ড ভ্যালিডেশন যেমন ছিল তেমনই থাকবে) ...
 AUTH_PASSWORD_VALIDATORS = [
     { 'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator', },
     { 'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', },
@@ -101,28 +89,18 @@ AUTH_PASSWORD_VALIDATORS = [
     { 'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator', },
 ]
 
-
 # Internationalization
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
-
-# Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
-# --- কাস্টম কনফিগারেশন (সবশেষে) ---
-
-# মিডিয়া ফাইল (ছবি/মাইন্ড ম্যাপ) আপলোডের জন্য
+# মিডিয়া এবং CKEditor (অপরিবর্তিত)
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-
-# CKEditor 5 কনফিগারেশন
 CKEDITOR_5_CONFIGS = {
     'default': {
         'toolbar': ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'outdent', 'indent', '|', 'imageUpload', 'blockQuote', 'insertTable', 'undo', 'redo'],
@@ -131,11 +109,7 @@ CKEDITOR_5_CONFIGS = {
     },
 }
 
-# config/settings.py (ফাইলটির একদম শেষে)
-
-# config/settings.py (ফাইলটির একদম শেষে)
-
-# --- (চূড়ান্ত এবং সঠিক) Authentication কনফিগারেশন ---
+# --- (পরিবর্তিত) Authentication কনফিগারেশন ---
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -144,14 +118,31 @@ REST_FRAMEWORK = {
 }
 SITE_ID = 1
 
-# --- allauth নতুন এবং পরিষ্কার সেটিংস ---
+# --- (গুরুত্বপূর্ণ) allauth নতুন এবং পরিষ্কার সেটিংস ---
 
-ACCOUNT_AUTHENTICATION_METHOD = 'username' 
-ACCOUNT_EMAIL_VERIFICATION = 'none'
-ACCOUNT_EMAIL_REQUIRED = False
-ACCOUNT_USERNAME_REQUIRED = True
+# (পরিবর্তন) আমরা এখন ইউজারনেমের বদলে ইমেইল দিয়ে লগইন করাবো
+ACCOUNT_AUTHENTICATION_METHOD = 'email' 
+ACCOUNT_EMAIL_VERIFICATION = 'none' # (চাইলে 'mandatory' করতে পারেন)
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = False # <-- গুগল লগইনের জন্য এটি False করা ভালো
+ACCOUNT_SIGNUP_PASSWORD_ENTER_TWICE = False # (এটি dj_rest_auth এর জন্য)
 
-# --- (গুরুত্বপূর্ণ) ---
-# আমরা এই লাইনটি ফিরিয়ে আনছি এবং নিশ্চিত করছি যে এটি 'password1' ও 'password2' ব্যবহার করে
-ACCOUNT_SIGNUP_FIELDS = ['username', 'password1', 'password2'] 
-# ---------------------------------
+# --- (নতুন) গুগল সেটিংস ---
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'SCOPE': [
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': {
+            'access_type': 'online',
+        },
+        'OAUTH_PKCE_ENABLED': True,
+    }
+}
+
+# --- (নতুন) dj-rest-auth অ্যাডাপ্টার ---
+# এটি React Native থেকে পাঠানো টোকেন গ্রহণ করার জন্য
+REST_AUTH = {
+    'SOCIAL_LOGIN_AAPTER': 'allauth.socialaccount.adapter.DefaultSocialAccountAdapter'
+}

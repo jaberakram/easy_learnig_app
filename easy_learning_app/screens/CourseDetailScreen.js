@@ -13,55 +13,53 @@ export default function CourseDetailScreen({ route }) {
   const [course, setCourse] = useState(null);
   const [error, setError] = useState(null);
 
-  // --- (সংশোধিত) useFocusEffect ---
-  // আমরা এখন Error লগের নির্দেশনা অনুযায়ী কোডটি সাজিয়েছি
   useFocusEffect(
     useCallback(() => {
-      // async ফাংশনটি এখন useCallback-এর ভেতরে ডিফাইন করা হয়েছে
       async function fetchCourseDetails() {
         if (!courseId || !userToken || !API_URL_BASE) return;
-
         try {
-          // প্রতিবার ফোকাস হলেই লোডিং দেখাবে না, শুধু প্রথমবার বা রিফ্রেশ হলে
-          // setLoading(true); // <-- এই লাইনটি কমেন্ট আউট করলে রিফ্রেশ স্মুথ হয়
           setError(null);
-          
           const response = await fetch(`${API_URL_BASE}/api/courses/${courseId}/`, {
             headers: {
               'Authorization': `Token ${userToken}`,
             },
           });
-
           if (!response.ok) {
             throw new Error('কোর্সের বিস্তারিত আনতে সমস্যা হয়েছে।');
           }
-
           const json = await response.json();
           setCourse(json);
+
+          // --- (নতুন) প্রিমিয়াম চেক ---
+          // যদি কোর্স প্রিমিয়াম হয় কিন্তু ইউজার এনরোলড না থাকে
+          if (json.is_premium && !json.is_enrolled) {
+            // তাকে Paywall স্ক্রিনে পাঠিয়ে দিন
+            navigation.replace('Paywall', { 
+              courseId: json.id, 
+              courseTitle: json.title 
+            });
+          }
+          // --------------------------
+
         } catch (e) {
           console.error(e);
           setError(e.message);
         } finally {
-          setLoading(false); // লোডিং শুধু সবশেষে বন্ধ হবে
+          setLoading(false);
         }
       }
-
-      fetchCourseDetails(); // <-- ভেতরের ফাংশনটিকে কল করা হয়েছে
-
-    }, [courseId, userToken, API_URL_BASE]) // <-- useCallback-এর ডিপেন্ডেন্সি
+      fetchCourseDetails();
+    }, []) 
   );
-  // ------------------------------------
 
-
-  // --- ইউনিট কার্ড রেন্ডার করার ফাংশন (অপরিবর্তিত) ---
   const renderUnitCard = ({ item: unit }) => {
+    // ... (এই ফাংশনটি অপরিবর্তিত) ...
     const earned = unit.user_earned_points || 0;
     const total = unit.total_possible_points || 0;
     let percentage = 0;
     if (total > 0) {
       percentage = (earned / total) * 100;
     }
-
     return (
       <TouchableOpacity 
         style={styles.card}
@@ -71,7 +69,6 @@ export default function CourseDetailScreen({ route }) {
         })}
       >
         <Text style={styles.cardTitle}>Unit {unit.order}: {unit.title}</Text>
-        
         {total > 0 ? (
           <View style={styles.progressContainer}>
             <Text style={styles.progressText}>{earned} / {total} Points ({percentage.toFixed(0)}%)</Text>
@@ -86,12 +83,11 @@ export default function CourseDetailScreen({ route }) {
     );
   };
 
-  // --- রেন্ডারিং ---
-  if (loading) {
+  if (loading || !course) { // <-- !course চেক যোগ করা হয়েছে
     return <ActivityIndicator style={styles.loader} size="large" color="#0000ff" />;
   }
 
-  if (error || !course) {
+  if (error) {
     return (
       <View style={styles.loader}>
         <Text style={styles.errorText}>{error || 'কোর্সটি খুঁজে পাওয়া যায়নি।'}</Text>
@@ -99,6 +95,17 @@ export default function CourseDetailScreen({ route }) {
     );
   }
 
+  // --- (নতুন) যদি কোর্সটি প্রিমিয়াম হয়, তবে এই স্ক্রিন কিছুই দেখাবে না
+  // কারণ useFocusEffect তাকে Paywall-এ পাঠিয়ে দেবে
+  if (course.is_premium && !course.is_enrolled) {
+    return (
+      <View style={styles.loader}>
+        <Text>Redirecting...</Text>
+      </View>
+    );
+  }
+
+  // --- শুধুমাত্র ফ্রি বা এনরোল করা ইউজাররাই নিচের কন্টেন্ট দেখবে ---
   return (
     <View style={styles.container}>
       <Text style={styles.description}>{course.description}</Text>

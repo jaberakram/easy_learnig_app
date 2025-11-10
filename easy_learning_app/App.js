@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+
 // AuthContext ইম্পোর্ট
 import { AuthProvider, useAuth } from './context/AuthContext';
 
@@ -19,6 +20,8 @@ import LessonArticleScreen from './screens/LessonArticleScreen';
 import QuizScreen from './screens/QuizScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import PaywallScreen from './screens/PaywallScreen'; 
+import WhatsappGuideScreen from './screens/WhatsappGuideScreen'; // <-- (এটিই আমাদের দরকার)
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -34,10 +37,25 @@ function MainAppStack() {
       <Stack.Screen name="LessonVideo" component={LessonVideoScreen} options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} />
       <Stack.Screen name="LessonArticle" component={LessonArticleScreen} options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} />
       <Stack.Screen name="QuizScreen" component={QuizScreen} options={({ route }) => ({ title: route.params.quizTitle, headerLargeTitle: false })} />
+      
+      {/* --- আসল Paywall (ভবিষ্যতের জন্য) --- */}
+      <Stack.Screen 
+        name="Paywall" 
+        component={PaywallScreen} 
+        options={({ route }) => ({ title: route.params.courseTitle, headerLargeTitle: false })} 
+      />
+
+      {/* --- (সঠিক) WhatsApp গাইডলাইন স্ক্রিন --- */}
+      <Stack.Screen 
+        name="WhatsappGuide" 
+        component={WhatsappGuideScreen} 
+        options={{ title: 'Enrollment Guide', headerLargeTitle: false }} 
+      />
     </Stack.Navigator>
   );
 }
 
+// --- (HomeTabs অপরিবর্তিত) ---
 function HomeTabs() {
   return (
     <Tab.Navigator screenOptions={{ headerLargeTitle: true }}>
@@ -51,7 +69,7 @@ function HomeTabs() {
   );
 }
 
-// --- ২. Auth স্ট্যাক (লগইন করার আগে) ---
+// --- (AuthStack অপরিবর্তিত) ---
 function AuthStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -61,7 +79,7 @@ function AuthStack() {
   );
 }
 
-// --- ৩. মূল নেভিগেশন কন্ট্রোলার ---
+// --- (AppNavigator অপরিবর্তিত) ---
 function AppNavigator() {
   const { userToken, isLoading } = useAuth();
 
@@ -80,10 +98,9 @@ function AppNavigator() {
   );
 }
 
-// --- ৪. অ্যাপটি চালু করুন ---
+// --- (export default App অপরিবর্তিত) ---
 export default function App() {
   return (
-    // --- (নতুন) সেফ এরিয়া প্রোভাইডার ---
     <SafeAreaProvider>
       <AuthProvider>
         <AppNavigator />

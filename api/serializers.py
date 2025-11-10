@@ -5,10 +5,15 @@ from django.db.models import Sum
 from .models import (
     Category, Course, Unit, Lesson, 
     Quiz, Question, Choice,
-    UserLessonProgress, UserQuizAttempt
+    UserLessonProgress, UserQuizAttempt,
+    UserEnrollment  # <-- (নতুন) UserEnrollment ইম্পোর্ট করুন
 )
 
-# --- কুইজ সিস্টেম সিরিয়ালাইজার (অপরিবর্তিত) ---
+# ... (ChoiceSerializer, QuestionSerializer, QuizSerializer, LessonSerializer অপরিবর্তিত থাকবে) ...
+# ... (UnitSerializer অপরিবর্তিত থাকবে) ...
+
+# (নিচের সিরিয়ালাইজারগুলো কপি করে LessonSerializer-এর নিচে পেস্ট করুন)
+
 class ChoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Choice
@@ -26,20 +31,15 @@ class QuizSerializer(serializers.ModelSerializer):
         model = Quiz
         fields = ['id', 'title', 'quiz_type', 'lesson', 'unit', 'questions']
 
-# --- লেসন সিরিয়ালাইজার (অপরিবর্তিত) ---
 class LessonSerializer(serializers.ModelSerializer):
     quizzes = QuizSerializer(many=True, read_only=True)
     class Meta:
         model = Lesson
         fields = ['id', 'title', 'order', 'youtube_video_id', 'article_body', 'quizzes']
 
-
-# --- (সংশোধিত) ইউনিট সিরিয়ালাইজার ---
 class UnitSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True)
-    quizzes = QuizSerializer(many=True, read_only=True) # (ইউনিট মাস্টারি কুইজ)
-    
-    # --- (নতুন) প্রোগ্রেস বার-এর জন্য দুটি নতুন ফিল্ড ---
+    quizzes = QuizSerializer(many=True, read_only=True) 
     total_possible_points = serializers.SerializerMethodField()
     user_earned_points = serializers.SerializerMethodField()
 
@@ -48,56 +48,84 @@ class UnitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'order', 
             'lessons', 'quizzes', 
-            'total_possible_points', 'user_earned_points' # <-- নতুন ফিল্ড যোগ
+            'total_possible_points', 'user_earned_points' 
         ]
 
-    # --- (নতুন) ফাংশন: মোট সম্ভাব্য পয়েন্ট হিসাব করা ---
     def get_total_possible_points(self, unit):
         total_points = 0
-        
-        # ১. লেসন কুইজের পয়েন্ট যোগ করা
         lesson_quizzes = Quiz.objects.filter(lesson__unit=unit, quiz_type='LESSON')
         for quiz in lesson_quizzes:
             total_points += quiz.questions.aggregate(Sum('points'))['points__sum'] or 0
-            
-        # ২. মাস্টারি কুইজের পয়েন্ট যোগ করা
         mastery_quizzes = unit.quizzes.filter(quiz_type='UNIT')
         for quiz in mastery_quizzes:
             total_points += quiz.questions.aggregate(Sum('points'))['points__sum'] or 0
-            
         return total_points
 
-    # --- (নতুন) ফাংশন: ব্যবহারকারীর অর্জিত পয়েন্ট হিসাব করা ---
     def get_user_earned_points(self, unit):
-        # রিকোয়েস্ট থেকে ইউজারকে নিন
         user = self.context['request'].user
-        
-        # যদি ইউজার লগইন করা না থাকে
         if not user.is_authenticated:
             return 0
-        
-        # এই ইউনিটের সাথে সম্পর্কিত সব কুইজ অ্যাটেম্পট থেকে স্কোর যোগ করুন
         earned_points = UserQuizAttempt.objects.filter(
             user=user, 
-            quiz__lesson__unit=unit # লেসন কুইজ
+            quiz__lesson__unit=unit 
         ).aggregate(Sum('score'))['score__sum'] or 0
-        
         earned_points += UserQuizAttempt.objects.filter(
             user=user, 
-            quiz__unit=unit # মাস্টারি কুইজ
+            quiz__unit=unit 
         ).aggregate(Sum('score'))['score__sum'] or 0
-        
         return earned_points
 
 
-# --- কোর্স সিরিয়ালাইজার (অপরিবর্তিত) ---
+# --- (এই সিরিয়ালাইজারটি পরিবর্তন করা হয়েছে) ---
 class CourseSerializer(serializers.ModelSerializer):
-    # (এই ইউনিট সিরিয়ালাইজারটি এখন স্বয়ংক্রিয়ভাবে প্রোগ্রেস বার-এর ডেটা অন্তর্ভুক্ত করবে)
     units = UnitSerializer(many=True, read_only=True) 
+    total_possible_points = serializers.SerializerMethodField()
+    user_earned_points = serializers.SerializerMethodField()
+    
+    # --- (নতুন) এই দুটি ফিল্ড যোগ করা হয়েছে ---
+    is_premium = serializers.BooleanField(read_only=True)
+    is_enrolled = serializers.SerializerMethodField() # ইউজার কি এনরোলড?
 
     class Meta:
         model = Course
-        fields = ['id', 'title', 'description', 'category', 'units']
+        fields = [
+            'id', 'title', 'description', 'category', 'units',
+            'total_possible_points', 'user_earned_points',
+            'is_premium', 'is_enrolled' # <-- নতুন ফিল্ড যোগ
+        ]
+    
+    # --- (নতুন) এই ফাংশনটি যোগ করা হয়েছে ---
+    # ইউজার এই কোর্সে এনরোল করেছে কিনা তা চেক করে
+    def get_is_enrolled(self, course):
+        user = self.context.get('request').user
+        if not user or not user.is_authenticated:
+            return False
+        return UserEnrollment.objects.filter(user=user, course=course).exists()
+
+    # --- (এই ফাংশনগুলো অপরিবর্তিত) ---
+    def get_total_possible_points(self, course):
+        lesson_quiz_points = Question.objects.filter(
+            quiz__lesson__unit__course=course
+        ).aggregate(Sum('points'))['points__sum'] or 0
+        mastery_quiz_points = Question.objects.filter(
+            quiz__unit__course=course
+        ).aggregate(Sum('points'))['points__sum'] or 0
+        return lesson_quiz_points + mastery_quiz_points
+
+    def get_user_earned_points(self, course):
+        user = self.context['request'].user
+        if not user.is_authenticated:
+            return 0
+        earned_points = UserQuizAttempt.objects.filter(
+            user=user, 
+            quiz__lesson__unit__course=course
+        ).aggregate(Sum('score'))['score__sum'] or 0
+        earned_points += UserQuizAttempt.objects.filter(
+            user=user, 
+            quiz__unit__course=course
+        ).aggregate(Sum('score'))['score__sum'] or 0
+        return earned_points
+# --------------------------------------------------
 
 
 # --- ক্যাটাগরি সিরিয়ালাইজার (অপরিবর্তিত) ---
@@ -107,9 +135,10 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id', 'name', 'courses']
 
-# --- Auth এবং Dashboard সিরিয়ালাইজার (অপরিবর্তিত) ---
+# ... (বাকি সব সিরিয়ালাইজার অপরিবর্তিত থাকবে) ...
+# (নিচের সিরিয়ালাইজারগুলো কপি করে CategorySerializer-এর নিচে পেস্ট করুন)
+
 class RegisterSerializer(serializers.ModelSerializer):
-    # ... (আগের মতোই)
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
     class Meta:
         model = User

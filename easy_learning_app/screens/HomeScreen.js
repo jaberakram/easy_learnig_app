@@ -14,7 +14,7 @@ export default function HomeScreen() {
   const [dashboardData, setDashboardData] = useState(null); // <-- ড্যাশবোর্ডের ডেটা
   const [error, setError] = useState(null);
 
-  // --- (নতুন) ড্যাশবোর্ড ডেটা আনার ফাংশন ---
+  // --- ড্যাশবোর্ড ডেটা আনার ফাংশন ---
   const fetchDashboard = async () => {
     try {
       setLoading(true);
@@ -41,12 +41,12 @@ export default function HomeScreen() {
     }
   };
 
-  // --- (নতুন) useFocusEffect ---
+  // --- (সঠিক) useFocusEffect ---
   // এই হুক-টি ব্যবহারকারী যতবার "Home" ট্যাবে ফিরে আসবে, ততবার ডেটা রিফ্রেশ করবে।
   useFocusEffect(
     useCallback(() => {
       fetchDashboard();
-    }, [userToken]) // userToken পরিবর্তন হলেও রিফ্রেশ হবে
+    }, []) // <-- এই লাইনটি পরিবর্তন করা হয়েছে। খালি অ্যারে [] মানে প্রতিবার ফোকাস হলেই চলবে।
   );
 
   // --- রেন্ডারিং ---

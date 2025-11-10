@@ -1,12 +1,10 @@
 // context/AuthContext.js
-import React, { createContext, useState, useContext, useEffect } from 'react-native';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
 // --- গুরুত্বপূর্ণ ---
-// আপনার আইপি অ্যাড্রেসটি এখানে বসান
-const API_URL_BASE = 'http://192.168.0.200:8000';
-// (আমরা /api/auth অংশটি মুছে দিয়েছি যাতে API_URL_BASE সব জায়গায় ব্যবহার করা যায়)
+const API_URL_BASE = 'http://192.168.0.200:8000'; 
 
 const AuthContext = createContext();
 
@@ -14,11 +12,10 @@ export const AuthProvider = ({ children }) => {
   const [userToken, setUserToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- (লগইন ফাংশন) ---
+  // --- (লগইন ফাংশন - অপরিবর্তিত) ---
   const login = async (username, password) => {
     try {
       const response = await fetch(`${API_URL_BASE}/api/auth/login/`, {
-        // ... (বাকি কোড অপরিবর্তিত) ...
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username, password: password }),
@@ -29,7 +26,8 @@ export const AuthProvider = ({ children }) => {
         setUserToken(token);
         await AsyncStorage.setItem('userToken', token);
       } else {
-        Alert.alert('লগইন ব্যর্থ', json.non_field_errors[0] || 'একটি সমস্যা হয়েছে।');
+        // (পরিবর্তিত) ইমেইল দিয়ে লগইনের জন্য এরর মেসেজ আপডেট
+        Alert.alert('লগইন ব্যর্থ', json.non_field_errors?.[0] || json.email?.[0] || 'একটি সমস্যা হয়েছে।');
       }
     } catch (e) {
       console.error('Login error', e);
@@ -37,11 +35,10 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // --- (রেজিস্ট্রেশন ফাংশন) ---
+  // --- (রেজিস্ট্রেশন ফাংশন - অপরিবর্তিত) ---
   const register = async (username, password, password2) => {
     try {
-      const response = await fetch(`${API_URL_BASE}/api/register/`, { // <-- কাস্টম URL
-        // ... (বাকি কোড অপরিবর্তিত) ...
+      const response = await fetch(`${API_URL_BASE}/api/register/`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username, password: password, password2: password2 }),
@@ -62,7 +59,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // --- (লগআউট ফাংশন) ---
+  // --- (পরিবর্তিত) গুগল লগইন ফাংশন ---
+  // এটি এখন accessToken দিয়ে কল করা হবে
+  const googleLogin = async (accessToken) => {
+    try {
+      const response = await fetch(`${API_URL_BASE}/api/auth/google/`, { // <-- আমাদের ব্যাকএন্ড API URL
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          access_token: accessToken, // <-- আমরা এখন accessToken পাঠাচ্ছি
+        }),
+      });
+      const json = await response.json();
+      if (response.ok) {
+        const token = json.key;
+        setUserToken(token);
+        await AsyncStorage.setItem('userToken', token);
+      } else {
+        Alert.alert('গুগল লগইন ব্যর্থ', json.non_field_errors[0] || 'একটি সমস্যা হয়েছে।');
+      }
+    } catch (e) {
+      console.error('Google Login error', e);
+      Alert.alert('লগইন ব্যর্থ', 'গুগল সার্ভারের সাথে সংযোগে সমস্যা।');
+    }
+  };
+  // --------------------------------
+
+  // --- (লগআউট ফাংশন - অপরিবর্তিত) ---
   const logout = async () => {
     try {
       await fetch(`${API_URL_BASE}/api/auth/logout/`, {
@@ -80,7 +103,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // --- অ্যাপ চালু হলে টোকেন চেক করা (অপরিবর্তিত) ---
+  // --- (isLoggedIn - অপরিবর্তিত) ---
   const isLoggedIn = async () => {
     try {
       setIsLoading(true);
@@ -98,10 +121,11 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider value={{
       login, 
       logout, 
-      register, 
-      userToken,  // <-- আমরা টোকেনটি এক্সপোর্ট করছি
+      register,
+      googleLogin, // <-- (পরিবর্তিত)
+      userToken,
       isLoading,
-      API_URL_BASE // <-- আমরা বেস URL টি এক্সপোর্ট করছি
+      API_URL_BASE
     }}>
       {children}
     </AuthContext.Provider>
