@@ -1,6 +1,7 @@
 // screens/QuizScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Alert } from 'react-native';
+// --- পরিবর্তন: Modal এবং Pressable যোগ করুন ---
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Alert, Modal, Pressable } from 'react-native';
 import { useAuth } from '../context/AuthContext'; // <-- AuthContext ইম্পোর্ট করুন
 
 export default function QuizScreen({ route, navigation }) {
@@ -21,6 +22,10 @@ export default function QuizScreen({ route, navigation }) {
   const [showFeedback, setShowFeedback] = useState(false);
   const [score, setScore] = useState(0);
   const [quizFinished, setQuizFinished] = useState(false);
+
+  // --- পরিবর্তন: মডালের জন্য নতুন স্টেট ---
+  const [showExplanation, setShowExplanation] = useState(false);
+  // ------------------------------------
 
   // --- ডেটা লোড করা (সংশোধিত এবং উন্নত) ---
   useEffect(() => {
@@ -105,6 +110,7 @@ export default function QuizScreen({ route, navigation }) {
     setSelectedChoiceId(null);
     setIsAnswerCorrect(null);
     setShowFeedback(false);
+    setShowExplanation(false); // <-- (পরিবর্তন) পরবর্তী প্রশ্নে গেলে ব্যাখ্যা বন্ধ করুন
 
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
@@ -141,11 +147,9 @@ export default function QuizScreen({ route, navigation }) {
         <Text style={styles.quizTitle}>কুইজ সম্পন্ন!</Text>
         <Text style={styles.scoreText}>আপনার স্কোর</Text>
         
-        {/* --- (এই লাইনটি ঠিক করা হয়েছে) --- */}
         <Text style={styles.scoreValue}>
           {`${score} / ${totalPoints} (${percentage.toFixed(0)}%)`}
         </Text>
-        {/* -------------------------------- */}
 
         <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
           <Text style={styles.buttonText}>ইউনিটে ফিরে যান</Text>
@@ -167,9 +171,36 @@ export default function QuizScreen({ route, navigation }) {
 
   return (
     <ScrollView style={styles.container}>
+
+      {/* --- পরিবর্তন: মডালটি এখানে যোগ করুন --- */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showExplanation}
+        onRequestClose={() => {
+          setShowExplanation(!showExplanation);
+        }}
+      >
+        <View style={styles.modalCenteredView}>
+          <View style={styles.modalView}>
+            <Text style={styles.modalTitle}>সঠিক উত্তরের ব্যাখ্যা</Text>
+            <Text style={styles.modalText}>
+              {/* API থেকে পাওয়া explanation এখানে দেখানো হলো */}
+              {currentQuestion.explanation || "দুঃখিত, এই প্রশ্নের জন্য কোনো ব্যাখ্যা যোগ করা হয়নি।"}
+            </Text>
+            <Pressable
+              style={[styles.button, styles.buttonClose]}
+              onPress={() => setShowExplanation(false)}
+            >
+              <Text style={styles.buttonText}>বন্ধ করুন</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+      {/* --- মডাল শেষ --- */}
+
       <Text style={styles.quizTitle}>{quiz.title}</Text>
       <Text style={styles.progressText}>
-        {/* --- (এই লাইনটিও ঠিক করা হয়েছে) --- */}
         {`প্রশ্ন ${currentQuestionIndex + 1} / ${questions.length}`}
       </Text>
       <View style={styles.progressOuter}>
@@ -203,12 +234,24 @@ export default function QuizScreen({ route, navigation }) {
             <Text style={styles.buttonText}>{currentQuestionIndex === questions.length - 1 ? 'Finish (শেষ করুন)' : 'Next (পরবর্তী)'}</Text>
           </TouchableOpacity>
         )}
+        
+        {/* --- পরিবর্তন: "ব্যাখ্যা দেখুন" বাটনটি যোগ করুন --- */}
+        {/* এটি তখনই দেখাবে যখন উত্তর যাচাই করা হয়েছে (showFeedback) এবং উত্তরটি ভুল (!isAnswerCorrect) এবং প্রশ্নটির ব্যাখ্যা আছে */}
+        {showFeedback && !isAnswerCorrect && currentQuestion.explanation && (
+          <TouchableOpacity 
+            style={[styles.button, styles.explainButton]} 
+            onPress={() => setShowExplanation(true)}
+          >
+            <Text style={styles.buttonText}>ব্যাখ্যা দেখুন</Text>
+          </TouchableOpacity>
+        )}
+        {/* --- বাটন শেষ --- */}
       </View>
     </ScrollView>
   );
 }
 
-// --- স্টাইল (অপরিবর্তিত) ---
+// --- স্টাইল (মডালের জন্য নতুন স্টাইল যোগ করা হয়েছে) ---
 const styles = StyleSheet.create({
   loader: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   container: { flex: 1, padding: 15, backgroundColor: '#f5f5f5' },
@@ -230,4 +273,47 @@ const styles = StyleSheet.create({
   buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
   scoreText: { fontSize: 22, color: 'gray', marginTop: 20 },
   scoreValue: { fontSize: 48, fontWeight: 'bold', color: '#007bff', marginVertical: 10 },
+
+  // --- নতুন: ব্যাখ্যা বাটন ---
+  explainButton: {
+    backgroundColor: '#ffc107', // হলুদ রঙ
+    marginTop: 10,
+  },
+
+  // --- নতুন: মডাল স্টাইল ---
+  modalCenteredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)', // পেছনে অন্ধকার শেড
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+  },
+  modalText: {
+    marginBottom: 15,
+    textAlign: 'center',
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  buttonClose: {
+    backgroundColor: '#2196F3',
+  },
 });

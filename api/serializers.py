@@ -6,14 +6,26 @@ from .models import (
     Category, Course, Unit, Lesson, 
     Quiz, Question, Choice,
     UserLessonProgress, UserQuizAttempt,
-    UserEnrollment  # <-- (নতুন) UserEnrollment ইম্পোর্ট করুন
+    UserEnrollment,
+    # --- নতুন: গেমের মডেল দুটি ইম্পোর্ট করুন ---
+    MatchingGame, GamePair
 )
 
+# --- নতুন: ম্যাচিং গেমের সিরিয়ালাইজার ---
+class GamePairSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GamePair
+        fields = ['id', 'item_one', 'item_two']
+
+class MatchingGameSerializer(serializers.ModelSerializer):
+    pairs = GamePairSerializer(many=True, read_only=True)
+    class Meta:
+        model = MatchingGame
+        fields = ['id', 'title', 'order', 'pairs']
+# --- গেম সিরিয়ালাইজার শেষ ---
+
+
 # ... (ChoiceSerializer, QuestionSerializer, QuizSerializer, LessonSerializer অপরিবর্তিত থাকবে) ...
-# ... (UnitSerializer অপরিবর্তিত থাকবে) ...
-
-# (নিচের সিরিয়ালাইজারগুলো কপি করে LessonSerializer-এর নিচে পেস্ট করুন)
-
 class ChoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Choice
@@ -23,7 +35,7 @@ class QuestionSerializer(serializers.ModelSerializer):
     choices = ChoiceSerializer(many=True, read_only=True)
     class Meta:
         model = Question
-        fields = ['id', 'text', 'points', 'choices']
+        fields = ['id', 'text', 'points', 'choices', 'explanation'] 
 
 class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
@@ -37,9 +49,14 @@ class LessonSerializer(serializers.ModelSerializer):
         model = Lesson
         fields = ['id', 'title', 'order', 'youtube_video_id', 'article_body', 'quizzes']
 
+# --- পরিবর্তন: UnitSerializer আপডেট করা হয়েছে ---
 class UnitSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True)
     quizzes = QuizSerializer(many=True, read_only=True) 
+    # --- নতুন: গেম লিস্ট যোগ করুন ---
+    matching_games = MatchingGameSerializer(many=True, read_only=True)
+    # ---------------------------------
+    
     total_possible_points = serializers.SerializerMethodField()
     user_earned_points = serializers.SerializerMethodField()
 
@@ -48,8 +65,10 @@ class UnitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'order', 
             'lessons', 'quizzes', 
+            'matching_games', # <-- নতুন ফিল্ড যোগ করা হয়েছে
             'total_possible_points', 'user_earned_points' 
         ]
+    # --- পরিবর্তন শেষ ---
 
     def get_total_possible_points(self, unit):
         total_points = 0
@@ -76,33 +95,28 @@ class UnitSerializer(serializers.ModelSerializer):
         return earned_points
 
 
-# --- (এই সিরিয়ালাইজারটি পরিবর্তন করা হয়েছে) ---
+# ... (CourseSerializer, CategorySerializer অপরিবর্তিত থাকবে) ...
 class CourseSerializer(serializers.ModelSerializer):
     units = UnitSerializer(many=True, read_only=True) 
     total_possible_points = serializers.SerializerMethodField()
     user_earned_points = serializers.SerializerMethodField()
-    
-    # --- (নতুন) এই দুটি ফিল্ড যোগ করা হয়েছে ---
     is_premium = serializers.BooleanField(read_only=True)
-    is_enrolled = serializers.SerializerMethodField() # ইউজার কি এনরোলড?
+    is_enrolled = serializers.SerializerMethodField() 
 
     class Meta:
         model = Course
         fields = [
             'id', 'title', 'description', 'category', 'units',
             'total_possible_points', 'user_earned_points',
-            'is_premium', 'is_enrolled' # <-- নতুন ফিল্ড যোগ
+            'is_premium', 'is_enrolled' 
         ]
     
-    # --- (নতুন) এই ফাংশনটি যোগ করা হয়েছে ---
-    # ইউজার এই কোর্সে এনরোল করেছে কিনা তা চেক করে
     def get_is_enrolled(self, course):
         user = self.context.get('request').user
         if not user or not user.is_authenticated:
             return False
         return UserEnrollment.objects.filter(user=user, course=course).exists()
 
-    # --- (এই ফাংশনগুলো অপরিবর্তিত) ---
     def get_total_possible_points(self, course):
         lesson_quiz_points = Question.objects.filter(
             quiz__lesson__unit__course=course
@@ -125,19 +139,14 @@ class CourseSerializer(serializers.ModelSerializer):
             quiz__unit__course=course
         ).aggregate(Sum('score'))['score__sum'] or 0
         return earned_points
-# --------------------------------------------------
 
-
-# --- ক্যাটাগরি সিরিয়ালাইজার (অপরিবর্তিত) ---
 class CategorySerializer(serializers.ModelSerializer):
     courses = CourseSerializer(many=True, read_only=True)
     class Meta:
         model = Category
         fields = ['id', 'name', 'courses']
 
-# ... (বাকি সব সিরিয়ালাইজার অপরিবর্তিত থাকবে) ...
-# (নিচের সিরিয়ালাইজারগুলো কপি করে CategorySerializer-এর নিচে পেস্ট করুন)
-
+# ... (RegisterSerializer, UserLessonProgressSerializer, UserQuizAttemptSerializer অপরিবর্তিত থাকবে) ...
 class RegisterSerializer(serializers.ModelSerializer):
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
     class Meta:
@@ -170,4 +179,10 @@ class DashboardCourseSerializer(serializers.ModelSerializer):
 
 class DashboardSerializer(serializers.Serializer):
     my_courses = DashboardCourseSerializer(many=True)
+    total_points = serializers.IntegerField()
+
+# ... (ProfileSerializer অপরিবর্তিত থাকবে) ...
+class ProfileSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    email = serializers.EmailField()
     total_points = serializers.IntegerField()

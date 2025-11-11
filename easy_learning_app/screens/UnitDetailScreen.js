@@ -1,14 +1,13 @@
 // screens/UnitDetailScreen.js
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react'; // <-- useCallback যোগ করুন
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
 
-import { useNavigation } from '@react-navigation/native'; // <-- নেভিগেশনের জন্য ইম্পোর্ট
-import { useAuth } from '../context/AuthContext'; // <-- AuthContext ইম্পোর্ট করুন
+import { useNavigation, useFocusEffect } from '@react-navigation/native'; // <-- useFocusEffect ইম্পোর্ট করুন
+import { useAuth } from '../context/AuthContext'; 
 
 export default function UnitDetailScreen({ route }) {
   const { unitId } = route.params;
-  const navigation = useNavigation(); // <-- নেভিগেশন হুক
-  // AuthContext থেকে টোকেন এবং আপনার আইপি অ্যাড্রেস (API_URL_BASE) নিন
+  const navigation = useNavigation(); 
   const { userToken, API_URL_BASE } = useAuth(); 
 
   const [loading, setLoading] = useState(true);
@@ -16,28 +15,35 @@ export default function UnitDetailScreen({ route }) {
   const [learningItems, setLearningItems] = useState([]); // প্রসেস করা ডেটা
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchUnitDetails = async () => {
-      if (!unitId || !userToken || !API_URL_BASE) return;
+  // --- পরিবর্তন: fetchUnitDetails-কে useCallback-এ মোড়ানো হয়েছে ---
+  const fetchUnitDetails = useCallback(async () => {
+    if (!unitId || !userToken || !API_URL_BASE) return;
 
-      try {
-        const response = await fetch(`${API_URL_BASE}/api/units/${unitId}/`, {
-          headers: {
-            'Authorization': `Token ${userToken}`, // <-- টোকেন পাঠানো হচ্ছে
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error('ইউনিটের বিস্তারিত আনতে সমস্যা হয়েছে।');
+    try {
+      setLoading(true);
+      setError(null);
+      setLearningItems([]); // <-- লিস্ট খালি করুন
+
+      const response = await fetch(`${API_URL_BASE}/api/units/${unitId}/`, {
+        headers: {
+          'Authorization': `Token ${userToken}`, 
+        },
+      });
+      
+      if (!response.ok) {
+        if (response.status === 403) {
+           setError('আপনি এই প্রিমিয়াম কোর্সটি এখনো কেনেননি।');
+        } else {
+           throw new Error('ইউনিটের বিস্তারিত আনতে সমস্যা হয়েছে।');
         }
-
+      } else {
         const json = await response.json();
         setUnit(json);
 
-        // --- (গুরুত্বপূর্ণ) ডেটা প্রসেসিং লজিক ---
-        // আমরা API থেকে আসা ডেটাকে অ্যাপে দেখানোর জন্য প্রস্তুত করছি
+        // --- (গুরুত্বপূর্ণ) ডেটা প্রসেসিং লজিক (আপনার স্টাইল অনুযায়ী) ---
         const items = [];
         
+        // ১. লেসন (ভিডিও এবং আর্টিকেল)
         json.lessons.forEach(lesson => {
           // ভিডিও থাকলে, ভিডিও আইটেম যোগ করুন
           if (lesson.youtube_video_id) {
@@ -46,7 +52,7 @@ export default function UnitDetailScreen({ route }) {
               type: 'video',
               title: lesson.title,
               videoId: lesson.youtube_video_id,
-              lessonId: lesson.id, // <-- লেসন আইডি (প্রোগ্রেস সেভ করার জন্য)
+              lessonId: lesson.id, 
             });
           }
           // আর্টিকেল থাকলে, আর্টিকেল আইটেম যোগ করুন
@@ -55,8 +61,8 @@ export default function UnitDetailScreen({ route }) {
               id: `article-${lesson.id}`,
               type: 'article',
               title: lesson.title,
-              articleBody: lesson.article_body,
-              lessonId: lesson.id, // <-- লেসন আইডি (প্রোগ্রেস সেভ করার জন্য)
+              articleBody: lesson.article_body, // <-- (গুরুত্বপূর্ণ) আর্টিকেল বডি যোগ করা হয়েছে
+              lessonId: lesson.id, 
             });
           }
           // লেসন কুইজ থাকলে, সেগুলো যোগ করুন
@@ -70,7 +76,19 @@ export default function UnitDetailScreen({ route }) {
           });
         });
 
-        // মাস্টারি কুইজগুলো যোগ করুন
+        // --- নতুন: ২. ম্যাচিং গেম ---
+        // (এটি আর্টিকেল এবং লেসন কুইজের পরে দেখাবে)
+        json.matching_games.forEach(game => {
+          items.push({
+            id: `game-${game.id}`,
+            type: 'matching_game',
+            title: game.title,
+            gameId: game.id,
+          });
+        });
+        // -------------------------
+
+        // ৩. মাস্টারি কুইজ (ইউনিটের সাথে যুক্ত)
         json.quizzes.forEach(quiz => {
           items.push({
             id: `mastery-${quiz.id}`,
@@ -81,17 +99,23 @@ export default function UnitDetailScreen({ route }) {
         });
 
         setLearningItems(items); // প্রসেস করা ডেটা state-এ রাখুন
-
-      } catch (e) {
-        console.error(e);
-        setError(e.message || 'ইউনিটের বিস্তারিত আনতে সমস্যা হয়েছে।');
-      } finally {
-        setLoading(false);
       }
-    };
 
-    fetchUnitDetails();
-  }, [unitId, userToken, API_URL_BASE]);
+    } catch (e) {
+      console.error(e);
+      setError(e.message || 'ইউনিটের বিস্তারিত আনতে সমস্যা হয়েছে।');
+    } finally {
+      setLoading(false);
+    }
+  }, [unitId, userToken, API_URL_BASE]); // <-- ডিপেন্ডেন্সি
+
+  // --- পরিবর্তন: useFocusEffect ইরোর ঠিক করা হয়েছে ---
+  useFocusEffect(
+    useCallback(() => {
+      fetchUnitDetails(); // <-- async ফাংশনটি এখানে কল করা হয়েছে
+    }, [fetchUnitDetails])
+  );
+  // ----------------------------------------------
 
   // --- (আপডেটেড) আইটেম ট্যাপ হ্যান্ডলার ---
   const handleItemPress = (item) => {
@@ -99,18 +123,23 @@ export default function UnitDetailScreen({ route }) {
       navigation.navigate('LessonVideo', { 
         videoId: item.videoId,
         lessonTitle: item.title,
-        lessonId: item.lessonId, // <-- আমরা lessonId পাঠাচ্ছি
+        lessonId: item.lessonId, 
       });
     } else if (item.type === 'article') {
       navigation.navigate('LessonArticle', { 
-        articleBody: item.articleBody,
+        articleBody: item.articleBody, // <-- (গুরুত্বপূর্ণ) articleBody এখন পাস করা হচ্ছে
         lessonTitle: item.title,
-        lessonId: item.lessonId, // <-- আমরা lessonId পাঠাচ্ছি
+        lessonId: item.lessonId, 
       });
     } else if (item.type === 'lesson_quiz' || item.type === 'mastery_quiz') {
       navigation.navigate('QuizScreen', { 
         quizId: item.quizId,
         quizTitle: item.title
+      });
+    } else if (item.type === 'matching_game') { // <-- নতুন: গেম নেভিগেশন
+      navigation.navigate('MatchingGame', { 
+        gameId: item.gameId,
+        gameTitle: item.title
       });
     }
   };
@@ -124,6 +153,9 @@ export default function UnitDetailScreen({ route }) {
     else if (item.type === 'article') {
       icon = '📄 (আর্টিকেল)';
       style = [styles.card, styles.articleCard];
+    } else if (item.type === 'matching_game') { // <-- নতুন: গেম স্টাইল
+      icon = '🎮 (প্র্যাকটিস গেম)';
+      style = [styles.card, styles.gameCard];
     } else if (item.type === 'lesson_quiz') {
       icon = '✏️ (লেসন কুইজ)';
       style = [styles.card, styles.lessonQuizCard];
@@ -150,18 +182,26 @@ export default function UnitDetailScreen({ route }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Learning Materials</Text>
+      {/* --- পরিবর্তন: হেডার আপডেট করা হয়েছে (আপনার স্টাইল অনুযায়ী) --- */}
+      {unit && (
+        <View style={styles.header}>
+          <Text style={styles.pointsText}>
+            Points: {unit.user_earned_points} / {unit.total_possible_points}
+          </Text>
+        </View>
+      )}
+      {/* ------------------------------------ */}
       <FlatList
         data={learningItems}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        ListEmptyComponent={<Text style={styles.errorText}>এই ইউনিটে কোনো ম্যাটেরিয়াল নেই।</Text>}
+        ListEmptyComponent={<Text style={styles.errorText}>এই ইউনিটে কোনো ম্যাটেরিয়াল নেই।</Text>}
       />
     </View>
   );
 }
 
-// --- স্টাইল ---
+// --- স্টাইল (আপনার স্টাইল + গেম কার্ড) ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -180,11 +220,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   header: {
-    fontSize: 22,
-    fontWeight: 'bold',
     marginTop: 10,
     marginBottom: 10,
     paddingHorizontal: 5,
+  },
+  pointsText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
   },
   card: {
     backgroundColor: '#ffffff',
@@ -198,6 +242,13 @@ const styles = StyleSheet.create({
     borderColor: '#f7f0b8',
     borderWidth: 1,
   },
+  // --- নতুন: গেম কার্ড স্টাইল ---
+  gameCard: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#bbf7d0',
+    borderWidth: 1,
+  },
+  // -------------------------
   lessonQuizCard: {
     backgroundColor: '#f0f9ff',
     borderColor: '#d6ebff',

@@ -12,13 +12,13 @@ export const AuthProvider = ({ children }) => {
   const [userToken, setUserToken] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- (লগইন ফাংশন - অপরিবর্তিত) ---
-  const login = async (username, password) => {
+  // --- (লগইন ফাংশন - ইমেইল দিয়ে ঠিক করা) ---
+  const login = async (email, password) => { // <-- পরিবর্তন: username এর বদলে email
     try {
       const response = await fetch(`${API_URL_BASE}/api/auth/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username, password: password }),
+        body: JSON.stringify({ email: email, password: password }), // <-- পরিবর্তন: username এর বদলে email
       });
       const json = await response.json();
       if (response.ok) {
@@ -26,7 +26,6 @@ export const AuthProvider = ({ children }) => {
         setUserToken(token);
         await AsyncStorage.setItem('userToken', token);
       } else {
-        // (পরিবর্তিত) ইমেইল দিয়ে লগইনের জন্য এরর মেসেজ আপডেট
         Alert.alert('লগইন ব্যর্থ', json.non_field_errors?.[0] || json.email?.[0] || 'একটি সমস্যা হয়েছে।');
       }
     } catch (e) {
@@ -35,22 +34,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // --- (রেজিস্ট্রেশন ফাংশন - অপরিবর্তিত) ---
-  const register = async (username, password, password2) => {
+  // --- (রেজিস্ট্রেশন ফাংশন - ইমেইল দিয়ে ঠিক করা) ---
+  const register = async (email, password, password2) => { // <-- পরিবর্তন: 'username' এর বদলে 'email'
     try {
       const response = await fetch(`${API_URL_BASE}/api/register/`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username, password: password, password2: password2 }),
+        // 'username' এর বদলে 'email' পাঠান
+        body: JSON.stringify({ email: email, password: password, password2: password2 }), // <-- পরিবর্তন
       });
       const json = await response.json();
+      
       if (response.ok) {
         const token = json.key; 
         setUserToken(token);
         await AsyncStorage.setItem('userToken', token);
       } else {
-        const errorKey = Object.keys(json)[0];
-        const errorMsg = json[errorKey][0] || 'একটি অজানা ত্রুটি ঘটেছে।';
+        // নতুন এরর হ্যান্ডলিং (ধাপ ১ অনুযায়ী)
+        const emailError = json.email?.[0];
+        const passwordError = json.password?.[0];
+        const errorMsg = emailError || passwordError || 'একটি অজানা ত্রুটি ঘটেছে।';
         Alert.alert('রেজিস্ট্রেশন ব্যর্থ', errorMsg);
       }
     } catch (e) {
@@ -59,15 +62,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // --- (পরিবর্তিত) গুগল লগইন ফাংশন ---
-  // এটি এখন accessToken দিয়ে কল করা হবে
+  // --- (গুগল লগইন ফাংশন - অপরিবর্তিত) ---
   const googleLogin = async (accessToken) => {
     try {
-      const response = await fetch(`${API_URL_BASE}/api/auth/google/`, { // <-- আমাদের ব্যাকএন্ড API URL
+      const response = await fetch(`${API_URL_BASE}/api/auth/google/`, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          access_token: accessToken, // <-- আমরা এখন accessToken পাঠাচ্ছি
+          access_token: accessToken, 
         }),
       });
       const json = await response.json();
@@ -83,7 +85,6 @@ export const AuthProvider = ({ children }) => {
       Alert.alert('লগইন ব্যর্থ', 'গুগল সার্ভারের সাথে সংযোগে সমস্যা।');
     }
   };
-  // --------------------------------
 
   // --- (লগআউট ফাংশন - অপরিবর্তিত) ---
   const logout = async () => {
@@ -122,7 +123,7 @@ export const AuthProvider = ({ children }) => {
       login, 
       logout, 
       register,
-      googleLogin, // <-- (পরিবর্তিত)
+      googleLogin, 
       userToken,
       isLoading,
       API_URL_BASE

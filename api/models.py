@@ -2,28 +2,24 @@
 
 from django.db import models
 from django_ckeditor_5.fields import CKEditor5Field
-from django.conf import settings # <-- এই লাইনটি ইম্পোর্ট করুন
+from django.conf import settings 
 
-# ১. বিষয় (Category) মডেল
+# ১. বিষয় (Category) মডেল (অপরিবর্তিত)
 class Category(models.Model):
     name = models.CharField(max_length=100)
-    # icon = models.ImageField(upload_to='category_icons/', null=True, blank=True) # ছবির জন্য পরে যোগ করবো
 
     def __str__(self):
         return self.name
 
     class Meta:
-        verbose_name_plural = "Categories" # অ্যাডমিন প্যানেলে 'Categorys' না দেখিয়ে 'Categories' দেখাবে
+        verbose_name_plural = "Categories" 
 
-# ২. কোর্স (Course) মডেল
+# ২. কোর্স (Course) মডেল (অপরিবর্তিত)
 class Course(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True, null=True)
     category = models.ForeignKey(Category, related_name='courses', on_delete=models.SET_NULL, null=True)
-    
-    # --- (নতুন) প্রিমিয়াম ফিল্ড ---
     is_premium = models.BooleanField(default=False)
-    # --------------------------
 
     def __str__(self):
         return self.title
@@ -32,32 +28,31 @@ class Course(models.Model):
 class Unit(models.Model):
     title = models.CharField(max_length=200)
     course = models.ForeignKey(Course, related_name='units', on_delete=models.CASCADE)
-    order = models.PositiveIntegerField(default=0) # ইউনিটগুলো সাজানোর জন্য (যেমন: ইউনিট ১, ইউনিট ২)
+    order = models.PositiveIntegerField(default=0) 
 
     class Meta:
-        ordering = ['order'] # 'order' ফিল্ড অনুযায়ী সাজানো থাকবে
+        ordering = ['order'] 
 
     def __str__(self):
+        # --- পরিবর্তন: অ্যাডমিন প্যানেলে ভালো করে দেখানোর জন্য ---
         return f"{self.course.title} - Unit {self.order}: {self.title}"
 
 # ৪. লেসন (Lesson) মডেল (অপরিবর্তিত)
 class Lesson(models.Model):
     title = models.CharField(max_length=200)
     unit = models.ForeignKey(Unit, related_name='lessons', on_delete=models.CASCADE)
-    order = models.PositiveIntegerField(default=0) # লেসনগুলো সাজানোর জন্য
+    order = models.PositiveIntegerField(default=0) 
     youtube_video_id = models.CharField(max_length=50, blank=True, null=True, help_text="YouTube ভিডিওর ID দিন (যেমন: dQw4w9WgXcQ)")
     article_body = CKEditor5Field('Article Content', blank=True, null=True)
 
     class Meta:
-        ordering = ['order'] # 'order' ফিল্ড অনুযায়ী সাজানো থাকবে
+        ordering = ['order'] 
 
     def __str__(self):
-        return f"{self.unit.title} - Lesson {self.order}: {self.title}"
+        # --- পরিবর্তন: অ্যাডমিন প্যানেলে ভালো করে দেখানোর জন্য ---
+        return f"{self.unit.course.title} - {self.unit.title} - Lesson {self.order}: {self.title}"
     
-# ... (Quiz, Question, Choice মডেলগুলো অপরিবর্তিত থাকবে) ...
-# (নিচের কোডগুলো কপি করে Quiz, Question, Choice মডেলের পরে পেস্ট করুন)
-
-# ৫. কুইজ (Quiz) মডেল
+# ৫. কুইজ (Quiz) মডেল (অপরিবর্তিত)
 class Quiz(models.Model):
     class QuizType(models.TextChoices):
         LESSON_QUIZ = 'LESSON', 'Lesson Quiz'
@@ -75,17 +70,17 @@ class Quiz(models.Model):
     def __str__(self):
         return f"{self.quiz_type}: {self.title}"
 
-
-# ৬. প্রশ্ন (Question) মডেল
+# ৬. প্রশ্ন (Question) মডেল (অপরিবর্তিত, 'explanation' সহ)
 class Question(models.Model):
     quiz = models.ForeignKey(Quiz, related_name='questions', on_delete=models.CASCADE)
     text = models.TextField()
     points = models.PositiveIntegerField(default=10, help_text="এই প্রশ্নের জন্য কত পয়েন্ট") 
+    explanation = models.TextField(blank=True, null=True, help_text="উত্তরটি কেন সঠিক তার ব্যাখ্যা (ঐচ্ছিক)")
+
     def __str__(self):
         return self.text[:50] 
 
-
-# ৭. অপশন (Choice) মডেল
+# ৭. অপশন (Choice) মডেল (অপরিবর্তিত)
 class Choice(models.Model):
     question = models.ForeignKey(Question, related_name='choices', on_delete=models.CASCADE)
     text = models.CharField(max_length=500)
@@ -93,12 +88,7 @@ class Choice(models.Model):
     def __str__(self):
         return f"{self.question.text[:30]}... -> {self.text[:30]} ({self.is_correct})"
     
-
-
-# ... (UserLessonProgress এবং UserQuizAttempt মডেল অপরিবর্তিত থাকবে) ...
-# (নিচের কোডগুলো UserLessonProgress ও UserQuizAttempt মডেলের পরে পেস্ট করুন)
-
-# ৮. ইউজার লেসন প্রোগ্রেস (ভিডিও/আর্টিকেল শেষ করা)
+# ৮. ইউজার লেসন প্রোগ্রেস (অপরিবর্তিত)
 class UserLessonProgress(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE)
@@ -108,28 +98,59 @@ class UserLessonProgress(models.Model):
     def __str__(self):
         return f"{self.user.username} completed {self.lesson.title}"
 
-
-# ৯. ইউজার কুইজ অ্যাটেম্পট (কুইজের ফলাফল)
+# ৯. ইউজার কুইজ অ্যাটেম্পট (অপরিবর্তিত)
 class UserQuizAttempt(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
-    score = models.PositiveIntegerField() # ব্যবহারকারী কত পেয়েছে
-    total_points = models.PositiveIntegerField() # কুইজটি মোট কত পয়েন্টের ছিল
+    score = models.PositiveIntegerField() 
+    total_points = models.PositiveIntegerField() 
     attempted_at = models.DateTimeField(auto_now_add=True)
     def __str__(self):
         return f"{self.user.username} attempted {self.quiz.title} (Score: {self.score}/{self.total_points})"    
 
-
-# --- (নতুন) ১০. ইউজার এনরোলমেন্ট মডেল ---
-# কোন ইউজার কোন প্রিমিয়াম কোর্স কিনেছে তার হিসাব
+# ১০. ইউজার এনরোলমেন্ট মডেল (অপরিবর্তিত)
 class UserEnrollment(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     course = models.ForeignKey(Course, on_delete=models.CASCADE)
     enrolled_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # একজন ইউজার যেন একটি কোর্সে একবারই এনরোল করতে পারে
         unique_together = ('user', 'course')
     
     def __str__(self):
         return f"{self.user.username} enrolled in {self.course.title}"
+
+# --- পরিবর্তন: ১১. ম্যাচিং গেম (Matching Game) মডেল ---
+class MatchingGame(models.Model):
+    # --- নতুন: GameType যোগ করা হয়েছে ---
+    class GameType(models.TextChoices):
+        LESSON_GAME = 'LESSON', 'Lesson Game'
+        UNIT_GAME = 'UNIT', 'Unit Game'
+        
+    title = models.CharField(max_length=200)
+    game_type = models.CharField(max_length=10, choices=GameType.choices, default=GameType.LESSON_GAME)
+    
+    # --- নতুন: Lesson ফিল্ড যোগ করা হয়েছে ---
+    lesson = models.ForeignKey(Lesson, related_name='matching_games', on_delete=models.CASCADE, null=True, blank=True,
+                               help_text="যদি এটি 'Lesson Game' হয় তবে এখানে লেসনটি লিঙ্ক করুন")
+    
+    unit = models.ForeignKey(Unit, related_name='matching_games', on_delete=models.CASCADE, null=True, blank=True,
+                             help_text="যদি এটি 'Unit Game' হয় তবে এখানে ইউনিটটি লিঙ্ক করুন")
+    
+    order = models.PositiveIntegerField(default=0, help_text="গেমটি কত নম্বরে দেখাবে")
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.game_type}: {self.title}"
+# --- পরিবর্তন শেষ ---
+
+# ১২. গেম পেয়ার (Game Pair) মডেল (অপরিবর্তিত)
+class GamePair(models.Model):
+    game = models.ForeignKey(MatchingGame, related_name='pairs', on_delete=models.CASCADE)
+    item_one = models.CharField(max_length=200, help_text="কার্ড ১ (যেমন: Apple)")
+    item_two = models.CharField(max_length=200, help_text="কার্ড ২ (যেমন: আপেল)")
+
+    def __str__(self):
+        return f"{self.item_one} <-> {self.item_two}"

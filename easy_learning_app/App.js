@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons'; // <-- আইকনের জন্য
 
 // AuthContext ইম্পোর্ট
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -21,7 +22,11 @@ import QuizScreen from './screens/QuizScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import PaywallScreen from './screens/PaywallScreen'; 
-import WhatsappGuideScreen from './screens/WhatsappGuideScreen'; // <-- (এটিই আমাদের দরকার)
+import WhatsappGuideScreen from './screens/WhatsappGuideScreen'; 
+import ProfileScreen from './screens/ProfileScreen'; // <-- প্রোফাইল ইম্পোর্ট
+// --- নতুন: ম্যাচিং গেম স্ক্রিন ইম্পোর্ট করুন ---
+import MatchingGameScreen from './screens/MatchingGameScreen';
+// ---------------------------------------------
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -31,21 +36,35 @@ function MainAppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerLargeTitle: true }}>
       <Stack.Screen name="ExploreMain" component={ExploreScreen} options={{ title: 'Explore' }} />
-      <Stack.Screen name="CourseList" component={CourseListScreen} options={({ route }) => ({ title: route.params.categoryName })} />
+      
+      <Stack.Screen 
+        name="CourseList" 
+        component={CourseListScreen} 
+        options={({ route }) => ({ 
+          title: route.params.searchTitle || route.params.categoryName 
+        })} 
+      />
+
       <Stack.Screen name="CourseDetail" component={CourseDetailScreen} options={({ route }) => ({ title: route.params.courseTitle })} />
       <Stack.Screen name="UnitDetail" component={UnitDetailScreen} options={({ route }) => ({ title: route.params.unitTitle })} />
       <Stack.Screen name="LessonVideo" component={LessonVideoScreen} options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} />
       <Stack.Screen name="LessonArticle" component={LessonArticleScreen} options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} />
       <Stack.Screen name="QuizScreen" component={QuizScreen} options={({ route }) => ({ title: route.params.quizTitle, headerLargeTitle: false })} />
       
-      {/* --- আসল Paywall (ভবিষ্যতের জন্য) --- */}
+      {/* --- নতুন: ম্যাচিং গেম স্ক্রিন রেজিস্টার করুন --- */}
+      <Stack.Screen 
+        name="MatchingGame" 
+        component={MatchingGameScreen} 
+        options={({ route }) => ({ title: route.params.gameTitle, headerLargeTitle: false })} 
+      />
+      {/* ------------------------------------------- */}
+
       <Stack.Screen 
         name="Paywall" 
         component={PaywallScreen} 
         options={({ route }) => ({ title: route.params.courseTitle, headerLargeTitle: false })} 
       />
 
-      {/* --- (সঠিক) WhatsApp গাইডলাইন স্ক্রিন --- */}
       <Stack.Screen 
         name="WhatsappGuide" 
         component={WhatsappGuideScreen} 
@@ -55,15 +74,37 @@ function MainAppStack() {
   );
 }
 
-// --- (HomeTabs অপরিবর্তিত) ---
+// --- HomeTabs (আইকনসহ) ---
 function HomeTabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerLargeTitle: true }}>
+    <Tab.Navigator 
+      screenOptions={({ route }) => ({
+        headerLargeTitle: true,
+        tabBarActiveTintColor: '#007bff', // <-- (নতুন) অ্যাক্টিভ কালার
+        tabBarInactiveTintColor: 'gray',
+        tabBarIcon: ({ focused, color, size }) => { // <-- (নতুন) আইকন লজিক
+          let iconName;
+          if (route.name === 'Home') {
+            iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'ExploreStack') {
+            iconName = focused ? 'search' : 'search-outline';
+          } else if (route.name === 'Profile') {
+            iconName = focused ? 'person' : 'person-outline';
+          }
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+      })}
+    >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
       <Tab.Screen 
         name="ExploreStack"
         component={MainAppStack}
         options={{ title: 'Explore', headerShown: false }} 
+      />
+      <Tab.Screen 
+        name="Profile" 
+        component={ProfileScreen} 
+        options={{ title: 'Profile' }} 
       />
     </Tab.Navigator>
   );

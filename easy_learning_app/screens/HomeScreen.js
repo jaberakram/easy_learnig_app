@@ -1,58 +1,81 @@
 // screens/HomeScreen.js
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ActivityIndicator, FlatList, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, FlatList, RefreshControl, TextInput } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; 
 
-import { useAuth } from '../context/AuthContext'; // <-- আমাদের AuthContext ইম্পোর্ট করুন
-import { useFocusEffect } from '@react-navigation/native'; // <-- (নতুন) ট্যাব ফোকাস হুক
+import { useAuth } from '../context/AuthContext'; 
+import { useFocusEffect, useNavigation } from '@react-navigation/native'; 
 
 
 export default function HomeScreen() {
-  // AuthContext থেকে logout ফাংশন, টোকেন এবং URL নিন
+  // --- 'logout' বাটনটি এখানে রাখা হয়েছে কারণ Error পেজে এটি এখনো ব্যবহৃত হচ্ছে ---
   const { logout, userToken, API_URL_BASE } = useAuth();
+  const navigation = useNavigation(); 
 
   const [loading, setLoading] = useState(true);
-  const [dashboardData, setDashboardData] = useState(null); // <-- ড্যাশবোর্ডের ডেটা
+  const [dashboardData, setDashboardData] = useState(null); 
   const [error, setError] = useState(null);
+  const [searchText, setSearchText] = useState('');
 
-  // --- ড্যাশবোর্ড ডেটা আনার ফাংশন ---
-  const fetchDashboard = async () => {
+  const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
       const response = await fetch(`${API_URL_BASE}/api/dashboard/`, {
         headers: {
-          'Authorization': `Token ${userToken}`, // <-- টোকেন পাঠানো হচ্ছে
+          'Authorization': `Token ${userToken}`, 
         },
       });
 
       if (!response.ok) {
         throw new Error('ড্যাশবোর্ডের তথ্য আনতে সমস্যা হয়েছে।');
       }
-
       const json = await response.json();
-      setDashboardData(json); // <-- ডেটা state-এ সেভ করুন
-
+      setDashboardData(json); 
     } catch (e) {
       console.error('Dashboard fetch error', e);
       setError(e.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [userToken, API_URL_BASE]); 
 
-  // --- (সঠিক) useFocusEffect ---
-  // এই হুক-টি ব্যবহারকারী যতবার "Home" ট্যাবে ফিরে আসবে, ততবার ডেটা রিফ্রেশ করবে।
   useFocusEffect(
     useCallback(() => {
       fetchDashboard();
-    }, []) // <-- এই লাইনটি পরিবর্তন করা হয়েছে। খালি অ্যারে [] মানে প্রতিবার ফোকাস হলেই চলবে।
+    }, [fetchDashboard]) 
   );
 
-  // --- রেন্ডারিং ---
+  const handleSearchSubmit = useCallback(() => {
+    if (searchText.trim()) {
+      navigation.navigate('ExploreStack', {
+        screen: 'CourseList',
+        params: {
+          searchTerm: searchText,
+          searchTitle: `"${searchText}" এর ফলাফল`
+        },
+      });
+      setSearchText(''); 
+    }
+  }, [searchText, navigation]); 
 
-  // লোডিং অবস্থা
-  if (loading) {
+  
+  const renderHeader = useCallback(() => (
+    <>
+      <View style={styles.pointsCard}>
+        <Text style={styles.pointsLabel}>আপনার মোট পয়েন্ট</Text>
+        <Text style={styles.pointsValue}>
+          {dashboardData?.total_points || 0}
+        </Text>
+      </View>
+
+      <Text style={styles.header}>My Courses (আমার কোর্সসমূহ)</Text>
+    </>
+  ), [dashboardData]); 
+
+  // --- রেন্ডারিং লজিক (অপরিবর্তিত) ---
+  if (loading && !dashboardData) { 
     return (
       <SafeAreaView style={styles.loaderContainer}>
         <ActivityIndicator size="large" color="#0000ff" />
@@ -60,8 +83,8 @@ export default function HomeScreen() {
     );
   }
 
-  // এরর (Error) অবস্থা
-  if (error) {
+  // --- এখানে 'logout' বাটনটি থাকছে ---
+  if (error && !dashboardData) { 
     return (
       <SafeAreaView style={styles.loaderContainer}>
         <Text style={styles.errorText}>{error}</Text>
@@ -71,25 +94,30 @@ export default function HomeScreen() {
       </SafeAreaView>
     );
   }
-
-  // --- সফলভাবে লোড হলে ড্যাশবোর্ড দেখান ---
+  
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
         
-        {/* --- মোট পয়েন্ট কার্ড --- */}
-        <View style={styles.pointsCard}>
-          <Text style={styles.pointsLabel}>আপনার মোট পয়েন্ট</Text>
-          <Text style={styles.pointsValue}>
-            {dashboardData?.total_points || 0}
-          </Text>
+        {/* --- সার্চ বার (অপরিবর্তিত) --- */}
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="কী শিখতে চান? (যেমন: Python)"
+            value={searchText}
+            onChangeText={setSearchText} 
+            onSubmitEditing={handleSearchSubmit} 
+            returnKeyType="search"
+          />
+          <TouchableOpacity style={styles.searchButton} onPress={handleSearchSubmit}>
+            <Text style={styles.searchButtonText}>খুঁজুন</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* --- "My Courses" তালিকা --- */}
-        <Text style={styles.header}>My Courses (আমার কোর্সসমূহ)</Text>
         <FlatList
+          style={styles.container} 
           data={dashboardData?.my_courses || []}
           keyExtractor={(item) => item.id.toString()}
+          ListHeaderComponent={renderHeader} 
           renderItem={({ item }) => (
             <View style={styles.courseCard}>
               <Text style={styles.courseTitle}>{item.title}</Text>
@@ -99,22 +127,20 @@ export default function HomeScreen() {
           ListEmptyComponent={
             <Text style={styles.emptyText}>আপনি এখনো কোনো কোর্স শুরু করেননি। "Explore" ট্যাব থেকে শুরু করুন!</Text>
           }
-          // নিচে টেনে রিফ্রেশ করার সুবিধা
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={fetchDashboard} />
           }
+          
+          // --- পরিবর্তন: ListFooterComponent (লগআউট বাটন) মুছে ফেলা হয়েছে ---
+          // ListFooterComponent={...}
+          // ListFooterComponentStyle={{...}}
+          // -----------------------------------------------------------
         />
-
-        {/* --- লগআউট বাটন --- */}
-        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-          <Text style={styles.buttonText}>লগআউট করুন</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 }
 
-// --- স্টাইল ---
+// --- স্টাইল (অপরিবর্তিত) ---
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -127,7 +153,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    padding: 15,
+    paddingHorizontal: 15, 
   },
   errorText: {
     color: 'red',
@@ -140,6 +166,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',
+    // marginTop: 15, // <-- এটি এখন আর দরকার নেই
     marginBottom: 20,
     elevation: 4,
   },
@@ -151,6 +178,35 @@ const styles = StyleSheet.create({
     fontSize: 48,
     fontWeight: 'bold',
     color: 'white',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 15, 
+    paddingTop: 15, 
+    marginBottom: 10, 
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: 'white',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    fontSize: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  searchButton: {
+    marginLeft: 10,
+    backgroundColor: '#007bff',
+    paddingHorizontal: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  searchButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   header: {
     fontSize: 22,
@@ -184,7 +240,7 @@ const styles = StyleSheet.create({
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 10, // তালিকা থেকে একটু স্পেস
+    marginTop: 10, 
   },
   buttonText: {
     color: 'white',

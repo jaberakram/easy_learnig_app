@@ -1,101 +1,128 @@
 // screens/LessonArticleScreen.js
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, useWindowDimensions, Text, View, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
-
-import RenderHTML from 'react-native-render-html'; // <-- (সমাধান) এই লাইনটি যোগ করা হয়েছে
-import { useAuth } from '../context/AuthContext'; // <-- AuthContext ইম্পোর্ট করুন
+// --- 'ScrollView' এবং 'Text' (আর্টিকেলের জন্য) বাদ দিন ---
+import { View, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Text } from 'react-native';
+// --- 'WebView' ইম্পোর্ট করুন ---
+import { WebView } from 'react-native-webview'; 
+import { useAuth } from '../context/AuthContext';
 
 export default function LessonArticleScreen({ route, navigation }) {
-  // নেভিগেশন থেকে আর্টিকেল বডি ও লেসন আইডি রিসিভ করুন
-  const { articleBody, lessonId } = route.params;
-  const { userToken, API_URL_BASE } = useAuth(); // <-- টোকেন এবং API URL নিন
-  
-  const [isCompleting, setIsCompleting] = useState(false); // <-- বাটন লোডিং স্টেট
-  const { width } = useWindowDimensions();
+  const { articleBody, lessonId, lessonTitle } = route.params;
+  const { userToken, API_URL_BASE } = useAuth();
+  const [isCompleted, setIsCompleted] = useState(false);
 
-  const htmlSource = {
-    html: articleBody || '<p>এই পাঠে কোনো আর্টিকেল যোগ করা হয়নি।</p>'
-  };
-
-  // --- (নতুন) লেসন সম্পন্ন করার ফাংশন ---
-  const handleMarkAsComplete = async () => {
-    setIsCompleting(true);
+  const handleCompleteLesson = async () => {
     try {
-      await fetch(`${API_URL_BASE}/api/progress/lesson/`, {
+      const response = await fetch(`${API_URL_BASE}/api/progress/lesson/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Token ${userToken}`, // <-- টোকেন পাঠানো হচ্ছে
+          'Authorization': `Token ${userToken}`,
         },
-        body: JSON.stringify({
-          lesson: lessonId, // <-- কোন লেসনটি শেষ হলো
-        }),
+        body: JSON.stringify({ lesson: lessonId }),
       });
-      navigation.goBack();
-      
+      if (response.ok) {
+        setIsCompleted(true);
+        Alert.alert('সফল!', 'আপনি সফলভাবে পাঠটি সম্পন্ন করেছেন।');
+      } else {
+        throw new Error('পাঠ সম্পন্ন হিসেবে সেভ করা যায়নি।');
+      }
     } catch (e) {
-      console.error('Lesson complete error', e);
-      Alert.alert('ত্রুটি', 'লেসনটি সম্পন্ন হিসেবে মার্ক করা যায়নি।');
-      setIsCompleting(false);
+      console.error(e);
+      Alert.alert('ত্রুটি', e.message);
     }
   };
 
+  // --- (নতুন) HTML-কে সুন্দর করার জন্য CSS ---
+  const htmlWithStyling = `
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
+            font-size: 17px; /* ফন্ট সাইজ একটু বড় করা হলো */
+            line-height: 1.7; /* লাইন স্পেসিং বাড়ানো হলো */
+            padding: 15px;
+            color: #333;
+          }
+          h2, h3 {
+            color: #000;
+          }
+          code {
+            background-color: #f0f0f0;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 16px;
+          }
+          ul, ol {
+            padding-left: 25px;
+          }
+          li {
+            margin-bottom: 10px;
+          }
+          img { /* যদি আর্টিকেলে ছবি থাকে */
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+          }
+        </style>
+      </head>
+      <body>
+        ${articleBody}
+      </body>
+    </html>
+  `;
+  // ----------------------------------------
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {/* ১. আর্টিকেল কন্টেন্ট (স্ক্রল করা যাবে) */}
-        <ScrollView style={styles.scrollContainer}>
-          <RenderHTML
-            contentWidth={width - 40}
-            source={htmlSource}
-            tagsStyles={tagsStyles}
-          />
-        </ScrollView>
-
-        {/* ২. (আপডেটেড) পাঠ সম্পন্ন বাটন */}
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={[styles.button, isCompleting ? styles.buttonDisabled : null]}
-            onPress={handleMarkAsComplete}
-            disabled={isCompleting}
-          >
-            {isCompleting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.buttonText}>✅ পাঠ সম্পন্ন (ফিরে যান)</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+      <WebView
+        style={styles.webview}
+        originWhitelist={['*']}
+        source={{ html: htmlWithStyling }} // <-- এখানে HTML লোড করুন
+        scrollEnabled={true} 
+      />
+      
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity 
+          style={[styles.button, isCompleted ? styles.buttonDisabled : null]} 
+          onPress={handleCompleteLesson}
+          disabled={isCompleted}
+        >
+          <Text style={styles.buttonText}>
+            {isCompleted ? 'পাঠ সম্পন্ন হয়েছে' : 'পাঠ সম্পন্ন করুন'}
+          </Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 }
 
-// --- স্টাইল ---
+// --- স্টাইল (পরিবর্তিত) ---
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: 'white' },
-  container: { flex: 1 },
-  scrollContainer: {
+  safeArea: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    backgroundColor: '#ffffff',
+  },
+  webview: {
+    flex: 1, 
   },
   buttonContainer: {
     padding: 15,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
-    backgroundColor: 'white',
+    backgroundColor: 'white', 
   },
   button: {
     backgroundColor: '#007bff',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
-    minHeight: 50, // লোডিং স্পিনারের জন্য
-    justifyContent: 'center',
   },
   buttonDisabled: {
-    backgroundColor: '#aaa',
+    backgroundColor: '#a0a0a0',
   },
   buttonText: {
     color: 'white',
@@ -103,14 +130,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
-
-// HTML ট্যাগগুলোর জন্য কাস্টম স্টাইল (আগের মতোই)
-const tagsStyles = {
-  body: { whiteSpace: 'normal', color: '#333', fontSize: 17, lineHeight: 26 },
-  p: { marginBottom: 15 },
-  h1: { fontSize: 30, fontWeight: 'bold', marginBottom: 10 },
-  h2: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
-  ul: { marginLeft: 15 },
-  li: { marginBottom: 8 },
-  img: { maxWidth: '100%', height: 'auto', borderRadius: 8 },
-};

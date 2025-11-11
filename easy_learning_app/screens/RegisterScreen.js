@@ -1,18 +1,22 @@
 // screens/RegisterScreen.js
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, SafeAreaView, ActivityIndicator } from 'react-native';
+// SafeAreaView এখান থেকে সরিয়ে ফেলা হয়েছে
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // <-- (ওয়ার্নিং ঠিক করা) শুধু এখানেই থাকবে
 
 import { useAuth } from '../context/AuthContext';
 
 export default function RegisterScreen({ navigation }) {
-  const [username, setUsername] = useState('');
+  // 'username' এর বদলে 'email' স্টেট ব্যবহার করুন
+  const [email, setEmail] = useState(''); // <-- পরিবর্তন
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState(''); // পাসওয়ার্ড কনফার্ম
   const [loading, setLoading] = useState(false);
   const { register } = useAuth(); // register ফাংশনটি নিন
 
   const handleRegister = async () => {
-    if (!username || !password || !password2) {
+    // 'username' এর বদলে 'email' চেক করুন
+    if (!email || !password || !password2) { // <-- পরিবর্তন
       Alert.alert('ত্রুটি', 'অনুগ্রহ করে সব ফিল্ড পূরণ করুন।');
       return;
     }
@@ -22,10 +26,8 @@ export default function RegisterScreen({ navigation }) {
     }
 
     setLoading(true);
-    // --- (এই লাইনটি ঠিক করা হয়েছে) ---
-    // --- এখন আমরা দুটি পাসওয়ার্ডই পাঠাচ্ছি ---
-    await register(username, password, password2);
-    // ---------------------------------
+    // 'username' এর বদলে 'email' পাস করুন
+    await register(email, password, password2); // <-- পরিবর্তন
     setLoading(false);
   };
 
@@ -33,7 +35,16 @@ export default function RegisterScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>একাউন্ট তৈরি করুন</Text>
       
-      <TextInput style={styles.input} placeholder="Username (ইউজারনেম)" value={username} onChangeText={setUsername} autoCapitalize="none" />
+      {/* --- এই ইনপুট ফিল্ডটি পরিবর্তন করা হয়েছে --- */}
+      <TextInput 
+        style={styles.input} 
+        placeholder="Email (ইমেইল)" // <-- পরিবর্তন
+        value={email} 
+        onChangeText={setEmail} // <-- পরিবর্তন
+        autoCapitalize="none" 
+        keyboardType="email-address" // <-- টাইপ পরিবর্তন
+      />
+      
       <TextInput style={styles.input} placeholder="Password (পাসওয়ার্ড)" value={password} onChangeText={setPassword} secureTextEntry />
       <TextInput style={styles.input} placeholder="Confirm Password (পাসওয়ার্ড নিশ্চিত করুন)" value={password2} onChangeText={setPassword2} secureTextEntry />
       
