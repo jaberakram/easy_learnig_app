@@ -2,10 +2,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+# নতুন ভিউগুলো ইম্পোর্ট করুন
 from .views import (
     RegisterView, UserLessonProgressView, UserQuizAttemptView, DashboardView,
     GoogleLoginView,
-    ProfileView
+    ProfileView # <-- (গুরুত্বপূর্ণ) ProfileView ইম্পোর্ট করুন
 )
 
 router = DefaultRouter()
@@ -15,9 +16,7 @@ router.register(r'units', views.UnitViewSet, basename='unit')
 router.register(r'lessons', views.LessonViewSet, basename='lesson')
 router.register(r'quizzes', views.QuizViewSet, basename='quiz')
 router.register(r'questions', views.QuestionViewSet, basename='question')
-# --- নতুন: গেমের URL রেজিস্টার করুন ---
-router.register(r'matching-games', views.MatchingGameViewSet, basename='matchinggame')
-# ------------------------------------
+router.register(r'matching-games', views.MatchingGameViewSet, basename='matchinggame') # <-- গেমের URL
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -28,6 +27,8 @@ urlpatterns = [
     path('progress/lesson/', UserLessonProgressView.as_view(), name='progress_lesson'),
     path('progress/quiz/', UserQuizAttemptView.as_view(), name='progress_quiz'),
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
+    
+    # --- (গুরুত্বপূর্ণ) প্রোফাইল URL যোগ করুন ---
     path('profile/', ProfileView.as_view(), name='profile'),
-
+    # ---------------------------------------
 ]

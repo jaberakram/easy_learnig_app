@@ -20,18 +20,17 @@ import LessonVideoScreen from './screens/LessonVideoScreen';
 import LessonArticleScreen from './screens/LessonArticleScreen';
 import QuizScreen from './screens/QuizScreen';
 import LoginScreen from './screens/LoginScreen';
-import RegisterScreen from './screens/RegisterScreen';
+// --- পরিবর্তন: RegisterScreen ইম্পোর্ট করুন ---
+import RegisterScreen from './screens/RegisterScreen'; 
 import PaywallScreen from './screens/PaywallScreen'; 
 import WhatsappGuideScreen from './screens/WhatsappGuideScreen'; 
-import ProfileScreen from './screens/ProfileScreen'; // <-- প্রোফাইল ইম্পোর্ট
-// --- নতুন: ম্যাচিং গেম স্ক্রিন ইম্পোর্ট করুন ---
-import MatchingGameScreen from './screens/MatchingGameScreen';
-// ---------------------------------------------
+import ProfileScreen from './screens/ProfileScreen'; 
+import MatchingGameScreen from './screens/MatchingGameScreen'; 
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// --- ১. মূল অ্যাপ (লগইন করার পর) ---
+// --- MainAppStack (অপরিবর্তিত) ---
 function MainAppStack() {
   return (
     <Stack.Navigator screenOptions={{ headerLargeTitle: true }}>
@@ -51,13 +50,11 @@ function MainAppStack() {
       <Stack.Screen name="LessonArticle" component={LessonArticleScreen} options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} />
       <Stack.Screen name="QuizScreen" component={QuizScreen} options={({ route }) => ({ title: route.params.quizTitle, headerLargeTitle: false })} />
       
-      {/* --- নতুন: ম্যাচিং গেম স্ক্রিন রেজিস্টার করুন --- */}
       <Stack.Screen 
         name="MatchingGame" 
         component={MatchingGameScreen} 
         options={({ route }) => ({ title: route.params.gameTitle, headerLargeTitle: false })} 
       />
-      {/* ------------------------------------------- */}
 
       <Stack.Screen 
         name="Paywall" 
@@ -74,15 +71,15 @@ function MainAppStack() {
   );
 }
 
-// --- HomeTabs (আইকনসহ) ---
+// --- HomeTabs (অপরিবর্তিত) ---
 function HomeTabs() {
   return (
     <Tab.Navigator 
       screenOptions={({ route }) => ({
         headerLargeTitle: true,
-        tabBarActiveTintColor: '#007bff', // <-- (নতুন) অ্যাক্টিভ কালার
+        tabBarActiveTintColor: '#007bff', 
         tabBarInactiveTintColor: 'gray',
-        tabBarIcon: ({ focused, color, size }) => { // <-- (নতুন) আইকন লজিক
+        tabBarIcon: ({ focused, color, size }) => { 
           let iconName;
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
@@ -110,15 +107,17 @@ function HomeTabs() {
   );
 }
 
-// --- (AuthStack অপরিবর্তিত) ---
+// --- পরিবর্তন: AuthStack ---
 function AuthStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
+      {/* --- RegisterScreen আবার যোগ করা হয়েছে --- */}
+      <Stack.Screen name="Register" component={RegisterScreen} /> 
     </Stack.Navigator>
   );
 }
+// -----------------------------
 
 // --- (AppNavigator অপরিবর্তিত) ---
 function AppNavigator() {

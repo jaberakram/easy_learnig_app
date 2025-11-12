@@ -2,6 +2,7 @@
   "expo": {
     "name": "easy_learning_app",
     "slug": "easy_learning_app",
+    "scheme": "easy-learning-app", 
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -31,6 +32,3 @@
     ]
   }
 }
-
-
-

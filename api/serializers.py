@@ -7,7 +7,7 @@ from .models import (
     Quiz, Question, Choice,
     UserLessonProgress, UserQuizAttempt,
     UserEnrollment,
-    # --- নতুন: গেমের মডেল দুটি ইম্পোর্ট করুন ---
+    # --- গেমের মডেল দুটি ইম্পোর্ট করুন ---
     MatchingGame, GamePair
 )
 
@@ -21,7 +21,7 @@ class MatchingGameSerializer(serializers.ModelSerializer):
     pairs = GamePairSerializer(many=True, read_only=True)
     class Meta:
         model = MatchingGame
-        fields = ['id', 'title', 'order', 'pairs']
+        fields = ['id', 'title', 'game_type', 'lesson', 'unit', 'order', 'pairs']
 # --- গেম সিরিয়ালাইজার শেষ ---
 
 
@@ -35,7 +35,7 @@ class QuestionSerializer(serializers.ModelSerializer):
     choices = ChoiceSerializer(many=True, read_only=True)
     class Meta:
         model = Question
-        fields = ['id', 'text', 'points', 'choices', 'explanation'] 
+        fields = ['id', 'text', 'points', 'choices', 'explanation'] # <-- 'explanation' যোগ করা আছে
 
 class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
@@ -45,17 +45,16 @@ class QuizSerializer(serializers.ModelSerializer):
 
 class LessonSerializer(serializers.ModelSerializer):
     quizzes = QuizSerializer(many=True, read_only=True)
+    matching_games = MatchingGameSerializer(many=True, read_only=True) # <-- গেম যোগ করা হয়েছে
     class Meta:
         model = Lesson
-        fields = ['id', 'title', 'order', 'youtube_video_id', 'article_body', 'quizzes']
+        fields = ['id', 'title', 'order', 'youtube_video_id', 'article_body', 'quizzes', 'matching_games']
 
-# --- পরিবর্তন: UnitSerializer আপডেট করা হয়েছে ---
+# --- UnitSerializer আপডেট করা হয়েছে ---
 class UnitSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True)
     quizzes = QuizSerializer(many=True, read_only=True) 
-    # --- নতুন: গেম লিস্ট যোগ করুন ---
-    matching_games = MatchingGameSerializer(many=True, read_only=True)
-    # ---------------------------------
+    matching_games = MatchingGameSerializer(many=True, read_only=True) # <-- গেম যোগ করা হয়েছে
     
     total_possible_points = serializers.SerializerMethodField()
     user_earned_points = serializers.SerializerMethodField()
@@ -68,7 +67,6 @@ class UnitSerializer(serializers.ModelSerializer):
             'matching_games', # <-- নতুন ফিল্ড যোগ করা হয়েছে
             'total_possible_points', 'user_earned_points' 
         ]
-    # --- পরিবর্তন শেষ ---
 
     def get_total_possible_points(self, unit):
         total_points = 0
@@ -146,22 +144,49 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id', 'name', 'courses']
 
-# ... (RegisterSerializer, UserLessonProgressSerializer, UserQuizAttemptSerializer অপরিবর্তিত থাকবে) ...
+
+# --- RegisterSerializer (ইমেইল সহ) ---
 class RegisterSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(required=True) 
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
+
     class Meta:
         model = User
-        fields = ['username', 'password', 'password2']
-        extra_kwargs = {'password': {'write_only': True}}
+        fields = ['username', 'email', 'password', 'password2'] 
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'username': {'read_only': True} 
+        }
+
     def validate(self, data):
         if data['password'] != data['password2']:
-            raise serializers.ValidationError("দুটি পাসওয়ার্ড মেলেনি।")
+            raise serializers.ValidationError({"password": "দুটি পাসওয়ার্ড মেলেনি।"})
+        
+        if User.objects.filter(email=data['email']).exists():
+            raise serializers.ValidationError({"email": "এই ইমেইলটি আগেই ব্যবহৃত হয়েছে।"})
+            
         return data
+
     def create(self, validated_data):
         validated_data.pop('password2')
-        user = User.objects.create_user(**validated_data)
+        email = validated_data['email']
+        username = email.split('@')[0]
+        original_username = username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{original_username}_{counter}"
+            counter += 1
+            
+        user = User.objects.create_user(
+            username=username, 
+            email=validated_data['email'],
+            password=validated_data['password']
+        )
         return user
+# --- RegisterSerializer শেষ ---
 
+
+# ... (বাকি সিরিয়ালাইজারগুলো অপরিবর্তিত) ...
 class UserLessonProgressSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserLessonProgress
@@ -181,8 +206,9 @@ class DashboardSerializer(serializers.Serializer):
     my_courses = DashboardCourseSerializer(many=True)
     total_points = serializers.IntegerField()
 
-# ... (ProfileSerializer অপরিবর্তিত থাকবে) ...
+# --- (গুরুত্বপূর্ণ) প্রোফাইল সিরিয়ালাইজারটি যোগ করুন ---
 class ProfileSerializer(serializers.Serializer):
     username = serializers.CharField()
     email = serializers.EmailField()
     total_points = serializers.IntegerField()
+# --- পরিবর্তন শেষ ---

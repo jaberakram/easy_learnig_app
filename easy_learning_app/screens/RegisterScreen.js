@@ -1,22 +1,22 @@
 // screens/RegisterScreen.js
 import React, { useState } from 'react';
-// SafeAreaView এখান থেকে সরিয়ে ফেলা হয়েছে
+// --- পরিবর্তন: SafeAreaView ইম্পোর্ট ঠিক করা ---
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // <-- (ওয়ার্নিং ঠিক করা) শুধু এখানেই থাকবে
+import { SafeAreaView } from 'react-native-safe-area-context'; 
 
 import { useAuth } from '../context/AuthContext';
 
 export default function RegisterScreen({ navigation }) {
-  // 'username' এর বদলে 'email' স্টেট ব্যবহার করুন
-  const [email, setEmail] = useState(''); // <-- পরিবর্তন
+  // --- পরিবর্তন: 'username' এর বদলে 'email' স্টেট ---
+  const [email, setEmail] = useState(''); 
   const [password, setPassword] = useState('');
-  const [password2, setPassword2] = useState(''); // পাসওয়ার্ড কনফার্ম
+  const [password2, setPassword2] = useState(''); 
   const [loading, setLoading] = useState(false);
-  const { register } = useAuth(); // register ফাংশনটি নিন
+  const { register } = useAuth(); 
 
   const handleRegister = async () => {
-    // 'username' এর বদলে 'email' চেক করুন
-    if (!email || !password || !password2) { // <-- পরিবর্তন
+    // --- পরিবর্তন: 'username' এর বদলে 'email' চেক ---
+    if (!email || !password || !password2) { 
       Alert.alert('ত্রুটি', 'অনুগ্রহ করে সব ফিল্ড পূরণ করুন।');
       return;
     }
@@ -26,8 +26,8 @@ export default function RegisterScreen({ navigation }) {
     }
 
     setLoading(true);
-    // 'username' এর বদলে 'email' পাস করুন
-    await register(email, password, password2); // <-- পরিবর্তন
+    // --- পরিবর্তন: 'username' এর বদলে 'email' পাস ---
+    await register(email, password, password2); 
     setLoading(false);
   };
 
@@ -35,7 +35,7 @@ export default function RegisterScreen({ navigation }) {
     <SafeAreaView style={styles.container}>
       <Text style={styles.title}>একাউন্ট তৈরি করুন</Text>
       
-      {/* --- এই ইনপুট ফিল্ডটি পরিবর্তন করা হয়েছে --- */}
+      {/* --- পরিবর্তন: এই ইনপুট ফিল্ডটি আপডেট করা হয়েছে --- */}
       <TextInput 
         style={styles.input} 
         placeholder="Email (ইমেইল)" // <-- পরিবর্তন

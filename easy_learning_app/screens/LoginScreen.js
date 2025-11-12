@@ -1,42 +1,21 @@
 // screens/LoginScreen.js
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, SafeAreaView, ActivityIndicator, Platform } from 'react-native';
+import React, { useState } from 'react';
+// --- পরিবর্তন: SafeAreaView ইম্পোর্ট ঠিক করা ---
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; 
 import { useAuth } from '../context/AuthContext'; 
 
-// --- Expo-এর গুগল লগইন ইম্পোর্ট করুন ---
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-
-WebBrowser.maybeCompleteAuthSession();
+// --- গুগল লগইনের সব ইম্পোর্ট মুছে ফেলা হয়েছে ---
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState(''); 
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login, googleLogin } = useAuth(); // AuthContext থেকে ফাংশন নিন
+  const { login } = useAuth(); // <-- AuthContext থেকে শুধু 'login' নিন
 
-  // --- (সঠিক) Expo গুগল লগইন হুক ---
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    // এটি আপনার "Web application" Client ID (ব্যাকএন্ডের জন্য)
-    webClientId: '572157238701-ilop0tp2c5i2e0noorfvidqjk0iltg4h.apps.googleusercontent.com', 
-    
-    // এটি আপনার নতুন "Android" Client ID (ফ্রন্টএন্ডের জন্য)
-    androidClientId: '572157238701-8mghjfgi8qmn8nr9go4131mppfgfsjhl.apps.googleusercontent.com',
-  });
+  // --- গুগল লগইনের সব হুক (Hooks) মুছে ফেলা হয়েছে ---
 
-  // --- গুগল লগইন সফল হলে এই ইফেক্টটি কাজ করবে ---
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { authentication } = response;
-      if (authentication?.accessToken) {
-        // আমাদের ব্যাকএন্ডে accessToken পাঠান
-        googleLogin(authentication.accessToken);
-      }
-    }
-  }, [response, googleLogin]);
-
-  // --- ইমেইল/পাসওয়ার্ড দিয়ে লগইন ---
   const handleLogin = async () => {
     if (!email || !password) { 
       Alert.alert('ত্রুটি', 'অনুগ্রহ করে সব ফিল্ড পূরণ করুন।');
@@ -45,11 +24,6 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     await login(email, password); // AuthContext-এর login ফাংশন
     setLoading(false);
-  };
-
-  // --- গুগল বাটন ক্লিক ---
-  const handleGoogleLogin = () => {
-    promptAsync(); // এটি গুগলের লগইন পপআপ দেখাবে
   };
 
   return (
@@ -85,13 +59,7 @@ export default function LoginScreen({ navigation }) {
         )}
       </TouchableOpacity>
       
-      <TouchableOpacity 
-        style={[styles.button, styles.googleButton]} 
-        onPress={handleGoogleLogin} 
-        disabled={!request}
-      >
-        <Text style={styles.buttonText}>Sign in with Google</Text>
-      </TouchableOpacity>
+      {/* --- গুগল লগইন বাটন মুছে ফেলা হয়েছে --- */}
       
       <TouchableOpacity onPress={() => navigation.navigate('Register')}>
         <Text style={styles.linkText}>একাউন্ট নেই? রেজিস্ট্রেশন করুন</Text>
@@ -108,9 +76,6 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#f0f0f0', paddingVertical: 15, paddingHorizontal: 15, borderRadius: 8, marginBottom: 15, fontSize: 16, borderWidth: 1, borderColor: '#ddd' },
   button: { backgroundColor: '#007bff', padding: 18, borderRadius: 8, alignItems: 'center', marginTop: 10, minHeight: 58, justifyContent: 'center' },
   buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
-  googleButton: {
-    backgroundColor: '#DB4437', 
-    marginTop: 15,
-  },
+  // googleButton স্টাইল মুছে ফেলা হয়েছে
   linkText: { color: '#007bff', textAlign: 'center', marginTop: 20, fontSize: 16 },
 });
