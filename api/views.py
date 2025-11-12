@@ -7,7 +7,7 @@ from .models import (
     Category, Course, Unit, Lesson, 
     Quiz, Question, UserLessonProgress, UserQuizAttempt,
     UserEnrollment,
-    MatchingGame # <-- (ম্যাচিং গেম)
+    MatchingGame
 )
 from .serializers import (
     CategorySerializer, CourseSerializer, UnitSerializer, 
@@ -15,29 +15,14 @@ from .serializers import (
     RegisterSerializer, UserLessonProgressSerializer, UserQuizAttemptSerializer,
     DashboardSerializer,
     ProfileSerializer,
-    MatchingGameSerializer # <-- (ম্যাচিং গেম)
+    MatchingGameSerializer
 )
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import PermissionDenied
 
-# গুগল লগইন (অপরিবর্তিত)
-from dj_rest_auth.registration.serializers import SocialLoginSerializer 
-from dj_rest_auth.registration.views import SocialLoginView
-from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
-from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+# --- পরিবর্তন: গুগল লগইনের সব ইম্পোর্ট এবং ক্লাস মুছে ফেলা হয়েছে ---
 
-class GoogleLoginView(SocialLoginView):
-    adapter_class = GoogleOAuth2Adapter
-    client_class = OAuth2Client
-    serializer_class = SocialLoginSerializer 
-
-    def get_serializer(self, *args, **kwargs):
-        kwargs['context'] = self.get_renderer_context()
-        return self.serializer_class(*args, **kwargs)
-
-
-# --- কন্টেন্ট ভিউসেট (অপরিবর্তিত) ---
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
@@ -84,14 +69,11 @@ class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Question.objects.all()
     serializer_class = QuestionSerializer
 
-# --- ম্যাচিং গেম ভিউসেট (অপরিবর্তিত) ---
 class MatchingGameViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MatchingGame.objects.all()
     serializer_class = MatchingGameSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-
-# --- Auth ভিউ (অপরিবর্তিত) ---
 class RegisterView(generics.GenericAPIView):
     serializer_class = RegisterSerializer
     def post(self, request, *args, **kwargs):
@@ -102,8 +84,6 @@ class RegisterView(generics.GenericAPIView):
             return Response({"key": token.key}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
-# --- ইউজার প্রোগ্রেস ভিউ (অপরিবর্তিত) ---
 class UserLessonProgressView(generics.CreateAPIView):
     serializer_class = UserLessonProgressSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -131,7 +111,6 @@ class UserQuizAttemptView(generics.CreateAPIView):
         UserQuizAttempt.objects.filter(user=user, quiz=quiz).delete()
         serializer.save(user=user)
 
-# --- ড্যাশবোর্ড ভিউ (টাইপো ঠিক করা হয়েছে) ---
 class DashboardView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = DashboardSerializer 
@@ -141,11 +120,7 @@ class DashboardView(generics.GenericAPIView):
         total_points = UserQuizAttempt.objects.filter(user=user).aggregate(Sum('score'))['score__sum'] or 0
         completed_lesson_courses = Course.objects.filter(units__lessons__userlessonprogress__user=user).distinct()
         attempted_quiz_courses = Course.objects.filter(units__lessons__quizzes__userquizattempt__user=user).distinct()
-        
-        # --- পরিবর্তন: 'user=D=user' থেকে 'user=user' করা হয়েছে ---
         attempted_mastery_quiz_courses = Course.objects.filter(units__quizzes__userquizattempt__user=user).distinct()
-        # ---------------------------------------------------
-        
         my_courses = (completed_lesson_courses | attempted_quiz_courses | attempted_mastery_quiz_courses).distinct()
         data = {
             'total_points': total_points,
@@ -154,7 +129,6 @@ class DashboardView(generics.GenericAPIView):
         serializer = self.get_serializer(data)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-# --- প্রোফাইল ভিউ (অপরিবর্তিত) ---
 class ProfileView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ProfileSerializer

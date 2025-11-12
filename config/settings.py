@@ -7,6 +7,8 @@ SECRET_KEY = 'django-insecure-$%w)b1s!!q*i7e8t(4o06p=f13@x)2*5!9t)3@*v$!_g&g8@#c
 DEBUG = True
 ALLOWED_HOSTS = ['192.168.0.200', '127.0.0.1', 'localhost']
 
+# config/settings.py (অংশ বিশেষ)
+# ...
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -15,24 +17,25 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
-    'nested_admin', # <-- নেস্টেড অ্যাডমিন
-    
     # থার্ড পার্টি অ্যাপস
     'rest_framework',
     'rest_framework.authtoken',
-    'corsheaders', # <-- CORS (ইন্সটল করা হয়েছে)
+    'corsheaders', 
     'django_filters',
     'django_ckeditor_5',
     'allauth',
     'allauth.account',
-    'allauth.socialaccount',
-    'allauth.socialaccount.providers.google', 
+    # 'allauth.socialaccount', # <-- এই লাইনটি মুছে ফেলা হয়েছে
+    # 'allauth.socialaccount.providers.google', # <-- এই লাইনটি মুছে ফেলা হয়েছে
     'dj_rest_auth',
     'dj_rest_auth.registration',
 
     # লোকাল অ্যাপস
     'api',
 ]
+# ...
+# SOCIALACCOUNT_PROVIDERS এবং REST_AUTH এর ভেতরের Social Login-এর কোড মুছে ফেলুন
+# ...
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

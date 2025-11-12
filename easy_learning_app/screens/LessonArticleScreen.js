@@ -1,128 +1,120 @@
 // screens/LessonArticleScreen.js
-import React, { useState } from 'react';
-// --- 'ScrollView' এবং 'Text' (আর্টিকেলের জন্য) বাদ দিন ---
-import { View, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Text } from 'react-native';
-// --- 'WebView' ইম্পোর্ট করুন ---
-import { WebView } from 'react-native-webview'; 
-import { useAuth } from '../context/AuthContext';
+import React, { useState, useCallback } from 'react';
+import { ScrollView, StyleSheet, useWindowDimensions, Text, View, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+
+import RenderHTML from 'react-native-render-html'; 
+import { useAuth } from '../context/AuthContext'; 
+
+// --- নতুন: HTML Entities Decode করার ফাংশন ---
+// এটি সার্ভার থেকে আসা Escaped HTML কে (যেমন &lt;p&gt;) সঠিক HTML (<p>) এ পরিবর্তন করবে।
+const decodeHTMLEntities = (text) => {
+  if (!text) return '';
+  // সহজ এনটিটি ডিকোডিং
+  return text
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+};
+// ----------------------------------------
 
 export default function LessonArticleScreen({ route, navigation }) {
-  const { articleBody, lessonId, lessonTitle } = route.params;
-  const { userToken, API_URL_BASE } = useAuth();
-  const [isCompleted, setIsCompleted] = useState(false);
+  // নেভিগেশন থেকে আর্টিকেল বডি ও লেসন আইডি রিসিভ করুন
+  const { articleBody, lessonId } = route.params;
+  const { userToken, API_URL_BASE } = useAuth(); 
+  
+  const [isCompleting, setIsCompleting] = useState(false); 
+  const { width } = useWindowDimensions();
 
-  const handleCompleteLesson = async () => {
+  // --- পরিবর্তন: ডিকোডিং ফাংশন ব্যবহার করা হয়েছে ---
+  const decodedArticleBody = decodeHTMLEntities(articleBody);
+  
+  const htmlSource = {
+    html: decodedArticleBody || '<p>এই পাঠে কোনো আর্টিকেল যোগ করা হয়নি।</p>'
+  };
+  // ----------------------------------------
+
+  // --- লেসন সম্পন্ন করার ফাংশন ---
+  const handleMarkAsComplete = async () => {
+    setIsCompleting(true);
     try {
-      const response = await fetch(`${API_URL_BASE}/api/progress/lesson/`, {
+      await fetch(`${API_URL_BASE}/api/progress/lesson/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Token ${userToken}`,
+          'Authorization': `Token ${userToken}`, 
         },
-        body: JSON.stringify({ lesson: lessonId }),
+        body: JSON.stringify({
+          lesson: lessonId, 
+        }),
       });
-      if (response.ok) {
-        setIsCompleted(true);
-        Alert.alert('সফল!', 'আপনি সফলভাবে পাঠটি সম্পন্ন করেছেন।');
-      } else {
-        throw new Error('পাঠ সম্পন্ন হিসেবে সেভ করা যায়নি।');
-      }
+      navigation.goBack();
+      
     } catch (e) {
-      console.error(e);
-      Alert.alert('ত্রুটি', e.message);
+      console.error('Lesson complete error', e);
+      Alert.alert('ত্রুটি', 'লেসনটি সম্পন্ন হিসেবে মার্ক করা যায়নি।');
+      setIsCompleting(false);
     }
   };
 
-  // --- (নতুন) HTML-কে সুন্দর করার জন্য CSS ---
-  const htmlWithStyling = `
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
-            font-size: 17px; /* ফন্ট সাইজ একটু বড় করা হলো */
-            line-height: 1.7; /* লাইন স্পেসিং বাড়ানো হলো */
-            padding: 15px;
-            color: #333;
-          }
-          h2, h3 {
-            color: #000;
-          }
-          code {
-            background-color: #f0f0f0;
-            padding: 2px 5px;
-            border-radius: 4px;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 16px;
-          }
-          ul, ol {
-            padding-left: 25px;
-          }
-          li {
-            margin-bottom: 10px;
-          }
-          img { /* যদি আর্টিকেলে ছবি থাকে */
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-          }
-        </style>
-      </head>
-      <body>
-        ${articleBody}
-      </body>
-    </html>
-  `;
-  // ----------------------------------------
-
   return (
     <SafeAreaView style={styles.safeArea}>
-      <WebView
-        style={styles.webview}
-        originWhitelist={['*']}
-        source={{ html: htmlWithStyling }} // <-- এখানে HTML লোড করুন
-        scrollEnabled={true} 
-      />
-      
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={[styles.button, isCompleted ? styles.buttonDisabled : null]} 
-          onPress={handleCompleteLesson}
-          disabled={isCompleted}
-        >
-          <Text style={styles.buttonText}>
-            {isCompleted ? 'পাঠ সম্পন্ন হয়েছে' : 'পাঠ সম্পন্ন করুন'}
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.container}>
+        {/* ১. আর্টিকেল কন্টেন্ট (স্ক্রল করা যাবে) */}
+        <ScrollView style={styles.scrollContainer}>
+          <RenderHTML
+            contentWidth={width - 40}
+            source={htmlSource}
+            tagsStyles={tagsStyles}
+          />
+        </ScrollView>
+
+        {/* ২. (আপডেটেড) পাঠ সম্পন্ন বাটন */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity 
+            style={[styles.button, isCompleting ? styles.buttonDisabled : null]}
+            onPress={handleMarkAsComplete}
+            disabled={isCompleting}
+          >
+            {isCompleting ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.buttonText}>✅ পাঠ সম্পন্ন (ফিরে যান)</Text>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
-// --- স্টাইল (পরিবর্তিত) ---
+// --- স্টাইল ---
 const styles = StyleSheet.create({
-  safeArea: {
+  safeArea: { flex: 1, backgroundColor: 'white' },
+  container: { flex: 1 },
+  scrollContainer: {
     flex: 1,
-    backgroundColor: '#ffffff',
-  },
-  webview: {
-    flex: 1, 
+    paddingHorizontal: 20,
+    paddingTop: 10,
   },
   buttonContainer: {
     padding: 15,
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
-    backgroundColor: 'white', 
+    backgroundColor: 'white',
   },
   button: {
     backgroundColor: '#007bff',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
+    minHeight: 50, 
+    justifyContent: 'center',
   },
   buttonDisabled: {
-    backgroundColor: '#a0a0a0',
+    backgroundColor: '#aaa',
   },
   buttonText: {
     color: 'white',
@@ -130,3 +122,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 });
+
+// HTML ট্যাগগুলোর জন্য কাস্টম স্টাইল (অপরিবর্তিত)
+const tagsStyles = {
+  body: { whiteSpace: 'normal', color: '#333', fontSize: 17, lineHeight: 26 },
+  p: { marginBottom: 15 },
+  h1: { fontSize: 30, fontWeight: 'bold', marginBottom: 10 },
+  h2: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
+  ul: { marginLeft: 15 },
+  li: { marginBottom: 8 },
+  img: { maxWidth: '100%', height: 'auto', borderRadius: 8 },
+};
