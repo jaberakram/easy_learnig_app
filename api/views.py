@@ -2,26 +2,41 @@
 from rest_framework import viewsets, generics, permissions, status
 from rest_framework import filters
 from rest_framework.response import Response 
-from django.db.models import Sum, Q 
+from django.db.models import Sum, Q, F 
+from django.db.models.functions import Rank
+from django.db.models import Window, IntegerField
 from .models import (
     Category, Course, Unit, Lesson, 
     Quiz, Question, UserLessonProgress, UserQuizAttempt,
-    UserEnrollment,
-    MatchingGame
+    UserEnrollment, MatchingGame,
+    LearningGroup, GroupMembership 
 )
 from .serializers import (
     CategorySerializer, CourseSerializer, UnitSerializer, 
     LessonSerializer, QuizSerializer, QuestionSerializer,
     RegisterSerializer, UserLessonProgressSerializer, UserQuizAttemptSerializer,
-    DashboardSerializer,
-    ProfileSerializer,
-    MatchingGameSerializer
+    DashboardSerializer, ProfileSerializer, MatchingGameSerializer,
+    LearningGroupSerializer, LeaderboardEntrySerializer 
 )
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.authtoken.models import Token
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, NotFound
 
-# --- পরিবর্তন: গুগল লগইনের সব ইম্পোর্ট এবং ক্লাস মুছে ফেলা হয়েছে ---
+# --- নতুন: পারমিশন ক্লাস (গ্রুপের মেম্বারশিপ চেক) ---
+class IsGroupMember(permissions.BasePermission):
+    """শুধুমাত্র গ্রুপের মেম্বারদের দেখার এবং অ্যাডমিনদের সম্পাদনার অনুমতি দেয়।"""
+    def has_permission(self, request, view):
+        if view.action in ['list', 'create']:
+            return request.user.is_authenticated
+        
+        return True 
+        
+    def has_object_permission(self, request, view, obj):
+        if request.method in permissions.SAFE_METHODS: 
+            return GroupMembership.objects.filter(group=obj, user=request.user).exists()
+        
+        return GroupMembership.objects.filter(group=obj, user=request.user, is_group_admin=True).exists()
+# ------------------------------------------------------------------
 
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Category.objects.all()
@@ -73,6 +88,104 @@ class MatchingGameViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = MatchingGame.objects.all()
     serializer_class = MatchingGameSerializer
     permission_classes = [permissions.IsAuthenticated]
+    
+class LearningGroupViewSet(viewsets.ModelViewSet):
+    queryset = LearningGroup.objects.all() 
+    serializer_class = LearningGroupSerializer
+    permission_classes = [permissions.IsAuthenticated, IsGroupMember]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated:
+            return LearningGroup.objects.filter(memberships__user=user).distinct()
+        return LearningGroup.objects.none()
+
+    def perform_create(self, serializer):
+        serializer.save(admin=self.request.user) 
+        
+class GroupJoinView(generics.CreateAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def create(self, request, *args, **kwargs):
+        group_id = kwargs.get('group_id')
+        try:
+            group = LearningGroup.objects.get(pk=group_id)
+        except LearningGroup.DoesNotExist:
+            raise NotFound(detail="এই গ্রুপটি খুঁজে পাওয়া যায়নি।")
+
+        if GroupMembership.objects.filter(group=group, user=request.user).exists():
+            return Response({"detail": "আপনি ইতিমধ্যেই এই গ্রুপের মেম্বার।"}, status=status.HTTP_200_OK)
+
+        is_group_admin = (request.user == group.admin)
+        GroupMembership.objects.create(group=group, user=request.user, is_group_admin=is_group_admin)
+        
+        return Response({"detail": f"আপনি সফলভাবে '{group.title}' গ্রুপে যুক্ত হয়েছেন।"}, status=status.HTTP_201_CREATED)
+
+# --- নতুন: লিডারবোর্ড ভিউ (কোর লজিক) ---
+class GroupLeaderboardView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = LeaderboardEntrySerializer
+
+    def get(self, request, *args, **kwargs):
+        group_id = kwargs.get('group_id')
+        try:
+            group = LearningGroup.objects.get(pk=group_id)
+        except LearningGroup.DoesNotExist:
+            raise NotFound(detail="এই গ্রুপটি খুঁজে পাওয়া যায়নি।")
+
+        if not GroupMembership.objects.filter(group=group, user=request.user).exists():
+            raise PermissionDenied(detail="লিডারবোর্ড দেখার জন্য আপনাকে অবশ্যই গ্রুপের মেম্বার হতে হবে।")
+
+        course_ids = group.courses.values_list('id', flat=True)
+
+        quiz_ids = Quiz.objects.filter(
+            Q(lesson__unit__course__id__in=course_ids) | Q(unit__course__id__in=course_ids)
+        ).values_list('id', flat=True).distinct()
+
+        # ৪. স্কোর ক্যালকুলেশন এবং র‍্যাঙ্কিং (ORM Error ফিক্সড)
+        leaderboard_data = GroupMembership.objects.filter(
+            group=group
+        ).annotate(
+            total_score=Sum(
+                # FIX: 'user__userquizattempt' ব্যবহার করা হয়েছে (Traceback অনুযায়ী)
+                F('user__userquizattempt__score'),
+                filter=Q(user__userquizattempt__quiz__id__in=quiz_ids)
+            )
+        ).order_by(
+            F('total_score').desc(nulls_last=True)
+        ).values('user__username', 'total_score')
+        
+        
+        # ৫. র‍্যাঙ্ক তৈরি করুন
+        ranked_data = []
+        last_score = -1
+        current_rank = 1 
+        
+        for index, entry in enumerate(leaderboard_data):
+            score = entry['total_score'] or 0
+            
+            if score < last_score:
+                current_rank = index + 1 
+            
+            last_score = score
+            
+            # Tie-breaking logic: একই স্কোর হলে একই র‍্যাঙ্ক
+            if index > 0 and score == leaderboard_data[index-1]['total_score']:
+                final_rank = ranked_data[index-1]['rank']
+            else:
+                 final_rank = current_rank
+
+            ranked_data.append({
+                'rank': final_rank,
+                # Key Error ফিক্সড: সিরিয়ালাইজার অনুযায়ী 'username' কী ব্যবহার করা হয়েছে
+                'username': entry['user__username'], 
+                'total_score': score,
+            })
+        
+        # ৬. সিরিয়ালাইজ করে রেসপন্স
+        serializer = self.get_serializer(ranked_data, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class RegisterView(generics.GenericAPIView):
     serializer_class = RegisterSerializer

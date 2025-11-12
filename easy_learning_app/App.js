@@ -20,12 +20,17 @@ import LessonVideoScreen from './screens/LessonVideoScreen';
 import LessonArticleScreen from './screens/LessonArticleScreen';
 import QuizScreen from './screens/QuizScreen';
 import LoginScreen from './screens/LoginScreen';
-// --- পরিবর্তন: RegisterScreen ইম্পোর্ট করুন ---
 import RegisterScreen from './screens/RegisterScreen'; 
 import PaywallScreen from './screens/PaywallScreen'; 
 import WhatsappGuideScreen from './screens/WhatsappGuideScreen'; 
 import ProfileScreen from './screens/ProfileScreen'; 
 import MatchingGameScreen from './screens/MatchingGameScreen'; 
+// --- নতুন স্ক্রিন ইম্পোর্ট ---
+import GroupListScreen from './screens/GroupListScreen'; 
+import GroupDetailScreen from './screens/GroupDetailScreen';
+import CreateGroupScreen from './screens/CreateGroupScreen';
+import GroupJoinScreen from './screens/GroupJoinScreen'; // <-- নতুন ইমপোর্ট
+// ----------------------------
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -71,7 +76,21 @@ function MainAppStack() {
   );
 }
 
-// --- HomeTabs (অপরিবর্তিত) ---
+// --- GroupStack (সংশোধিত) ---
+function GroupStack() {
+    return (
+        <Stack.Navigator screenOptions={{ headerLargeTitle: true }}>
+            <Stack.Screen name="GroupListMain" component={GroupListScreen} options={{ title: 'Groups' }} />
+            <Stack.Screen name="GroupDetail" component={GroupDetailScreen} options={({ route }) => ({ title: route.params.groupTitle })} />
+            <Stack.Screen name="CreateGroup" component={CreateGroupScreen} options={{ title: 'Create New Group' }} />
+            {/* --- নতুন জয়েন স্ক্রিন যুক্ত করা হলো --- */}
+            <Stack.Screen name="GroupJoin" component={GroupJoinScreen} options={{ title: 'Join Group' }} /> 
+        </Stack.Navigator>
+    );
+}
+// ----------------------------
+
+// --- HomeTabs (গ্রুপ স্ট্যাক সহ আপডেট) ---
 function HomeTabs() {
   return (
     <Tab.Navigator 
@@ -83,6 +102,8 @@ function HomeTabs() {
           let iconName;
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'GroupsTab') { // <-- নতুন ট্যাব
+            iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'ExploreStack') {
             iconName = focused ? 'search' : 'search-outline';
           } else if (route.name === 'Profile') {
@@ -93,6 +114,13 @@ function HomeTabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
+      {/* --- নতুন গ্রুপ ট্যাব --- */}
+      <Tab.Screen 
+        name="GroupsTab"
+        component={GroupStack}
+        options={{ title: 'Groups', headerShown: false }} 
+      />
+      {/* ------------------------ */}
       <Tab.Screen 
         name="ExploreStack"
         component={MainAppStack}
@@ -107,19 +135,18 @@ function HomeTabs() {
   );
 }
 
-// --- পরিবর্তন: AuthStack ---
+// --- AuthStack (অপরিবর্তিত) ---
 function AuthStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Login" component={LoginScreen} />
-      {/* --- RegisterScreen আবার যোগ করা হয়েছে --- */}
       <Stack.Screen name="Register" component={RegisterScreen} /> 
     </Stack.Navigator>
   );
 }
 // -----------------------------
 
-// --- (AppNavigator অপরিবর্তিত) ---
+// --- AppNavigator (অপরিবর্তিত) ---
 function AppNavigator() {
   const { userToken, isLoading } = useAuth();
 

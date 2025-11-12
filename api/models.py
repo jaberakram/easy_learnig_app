@@ -3,6 +3,9 @@
 from django.db import models
 from django_ckeditor_5.fields import CKEditor5Field
 from django.conf import settings 
+# --- নতুন ইমপোর্ট ---
+from django.contrib.auth.models import User
+# --------------------
 
 # ১. বিষয় (Category) মডেল (অপরিবর্তিত)
 class Category(models.Model):
@@ -120,23 +123,18 @@ class UserEnrollment(models.Model):
     def __str__(self):
         return f"{self.user.username} enrolled in {self.course.title}"
 
-# --- পরিবর্তন: ১১. ম্যাচিং গেম (Matching Game) মডেল ---
+# ১১. ম্যাচিং গেম (Matching Game) মডেল (অপরিবর্তিত)
 class MatchingGame(models.Model):
-    # --- নতুন: GameType যোগ করা হয়েছে ---
     class GameType(models.TextChoices):
         LESSON_GAME = 'LESSON', 'Lesson Game'
         UNIT_GAME = 'UNIT', 'Unit Game'
         
     title = models.CharField(max_length=200)
     game_type = models.CharField(max_length=10, choices=GameType.choices, default=GameType.LESSON_GAME)
-    
-    # --- নতুন: Lesson ফিল্ড যোগ করা হয়েছে ---
     lesson = models.ForeignKey(Lesson, related_name='matching_games', on_delete=models.CASCADE, null=True, blank=True,
                                help_text="যদি এটি 'Lesson Game' হয় তবে এখানে লেসনটি লিঙ্ক করুন")
-    
     unit = models.ForeignKey(Unit, related_name='matching_games', on_delete=models.CASCADE, null=True, blank=True,
                              help_text="যদি এটি 'Unit Game' হয় তবে এখানে ইউনিটটি লিঙ্ক করুন")
-    
     order = models.PositiveIntegerField(default=0, help_text="গেমটি কত নম্বরে দেখাবে")
 
     class Meta:
@@ -144,7 +142,6 @@ class MatchingGame(models.Model):
 
     def __str__(self):
         return f"{self.game_type}: {self.title}"
-# --- পরিবর্তন শেষ ---
 
 # ১২. গেম পেয়ার (Game Pair) মডেল (অপরিবর্তিত)
 class GamePair(models.Model):
@@ -154,3 +151,44 @@ class GamePair(models.Model):
 
     def __str__(self):
         return f"{self.item_one} <-> {self.item_two}"
+
+
+# --- নতুন: ১৩. লার্নিং গ্রুপ (LearningGroup) মডেল ---
+class LearningGroup(models.Model):
+    title = models.CharField(max_length=200, help_text="গ্রুপের নাম")
+    # গ্রুপ অ্যাডমিন (Group Admin) হিসেবে যিনি গ্রুপটি তৈরি করেছেন
+    admin = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        related_name='owned_groups', 
+        on_delete=models.CASCADE,
+        help_text="গ্রুপের অ্যাডমিন"
+    )
+    # এই গ্রুপে কোন কোন কোর্স অন্তর্ভুক্ত থাকবে
+    courses = models.ManyToManyField(
+        'Course', 
+        related_name='groups',
+        blank=True,
+        help_text="এই গ্রুপে অন্তর্ভুক্ত কোর্সসমূহ"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        ordering = ['-created_at']
+
+# --- নতুন: ১৪. গ্রুপ মেম্বারশিপ (GroupMembership) মডেল ---
+class GroupMembership(models.Model):
+    group = models.ForeignKey(LearningGroup, related_name='memberships', on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='group_memberships', on_delete=models.CASCADE)
+    # গ্রুপের অন্যান্য মেম্বারদের কাছ থেকে আলাদাভাবে চিহ্নিত করতে
+    is_group_admin = models.BooleanField(default=False, help_text="ইউজার কি এই গ্রুপের অ্যাডমিন?")
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('group', 'user') # একটি ইউজার একই গ্রুপে দুইবার যোগ হতে পারবে না
+        ordering = ['joined_at']
+
+    def __str__(self):
+        return f"{self.user.username} is member of {self.group.title}"

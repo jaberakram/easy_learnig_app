@@ -6,7 +6,10 @@ from .models import (
     Quiz, Question, Choice,
     UserLessonProgress, UserQuizAttempt,
     UserEnrollment,
-    MatchingGame, GamePair
+    MatchingGame, GamePair,
+    # --- নতুন মডেল ইম্পোর্ট ---
+    LearningGroup, GroupMembership 
+    # -----------------------
 )
 
 # --- ধাপ ১: নেস্টেড ইনলাইন তৈরি (ভেতর থেকে বাইরে) ---
@@ -54,7 +57,37 @@ class MatchingGameInline(nested_admin.NestedStackedInline):
     class Media:
         js = ('api/admin_dynamic_forms.js',) 
 
-# --- ধাপ ২: প্রধান মডেল অ্যাডমিন ---
+# --- নতুন: গ্রুপ ইনলাইন ও অ্যাডমিন ক্লাস ---
+class GroupMembershipInline(admin.TabularInline): 
+    model = GroupMembership
+    extra = 1
+    # ইউজারকে AutoComplete এর মাধ্যমে খুঁজে বের করার সুবিধা
+    autocomplete_fields = ['user'] 
+    fields = ('user', 'is_group_admin')
+    readonly_fields = ('user',)
+
+class LearningGroupAdmin(admin.ModelAdmin): 
+    # 'id' ফিল্ডটি list_display এ যোগ করা হলো
+    list_display = ('id', 'title', 'admin', 'created_at', 'get_member_count')
+    list_filter = ('admin',)
+    search_fields = ['title', 'admin__username']
+    filter_horizontal = ('courses',) 
+    
+    inlines = [GroupMembershipInline]
+    
+    # 'id' ফিল্ডটি readonly_fields এ যোগ করা হলো
+    readonly_fields = ('admin', 'id') 
+    
+    def save_model(self, request, obj, form, change):
+        if not obj.pk:
+            obj.admin = request.user
+        super().save_model(request, obj, form, change)
+
+    def get_member_count(self, obj):
+        return obj.memberships.count()
+    get_member_count.short_description = 'Members'
+    
+# --- ধাপ ২: প্রধান মডেল অ্যাডমিন (অপরিবর্তিত) ---
 
 class LessonAdmin(nested_admin.NestedModelAdmin): 
     model = Lesson
@@ -90,7 +123,7 @@ class UnitAdmin(nested_admin.NestedModelAdmin):
     
     list_display = ('__str__', 'course', 'order') 
     list_filter = ('course',)
-    search_fields = ['title', 'course__title'] # <-- এটি এখানেও দরকার
+    search_fields = ['title', 'course__title'] 
     autocomplete_fields = ['course']
 
 class UnitInline(nested_admin.NestedStackedInline):
@@ -99,17 +132,17 @@ class UnitInline(nested_admin.NestedStackedInline):
     show_change_link = True 
     fields = ('title', 'order')
 
-# --- পরিবর্তন: CourseAdmin এবং CategoryAdmin আপডেট করা হয়েছে ---
+# --- পরিবর্তন: CourseAdmin এবং CategoryAdmin (অপরিবর্তিত) ---
 class CourseAdmin(nested_admin.NestedModelAdmin): 
     model = Course
     inlines = [UnitInline] 
     list_display = ('title', 'category', 'is_premium')
     list_filter = ('category', 'is_premium')
-    search_fields = ['title'] # <-- (গুরুত্বপূর্ণ) এই লাইনটি যোগ করা হয়েছে
+    search_fields = ['title']
     autocomplete_fields = ['category']
 
-class CategoryAdmin(admin.ModelAdmin): # <-- এটি নেস্টেড হওয়ার দরকার নেই
-    search_fields = ['name'] # <-- (গুরুত্বপূর্ণ) এই লাইনটি যোগ করা হয়েছে
+class CategoryAdmin(admin.ModelAdmin): 
+    search_fields = ['name'] 
 
 # --- ধাপ ৩: পুরনো অ্যাডমিন রেজিস্ট্রেশন মুছে নতুন দিয়ে রেজিস্টার করা ---
 try:
@@ -122,10 +155,13 @@ try:
     admin.site.unregister(Choice)
     admin.site.unregister(MatchingGame)
     admin.site.unregister(GamePair)
+    # --- নতুন: গ্রুপ মডেলগুলো আনরেজিস্টার (যদি থাকে) ---
+    admin.site.unregister(LearningGroup)
+    admin.site.unregister(GroupMembership)
 except admin.sites.NotRegistered:
     pass 
 
-admin.site.register(Category, CategoryAdmin) # <-- পরিবর্তন
+admin.site.register(Category, CategoryAdmin)
 admin.site.register(Course, CourseAdmin)
 admin.site.register(Unit, UnitAdmin)
 admin.site.register(Lesson, LessonAdmin)
@@ -136,24 +172,25 @@ admin.site.register(Choice)
 admin.site.register(MatchingGame)
 admin.site.register(GamePair)
 
+# --- নতুন: গ্রুপ মডেলগুলো রেজিস্টার ---
+admin.site.register(LearningGroup, LearningGroupAdmin)
+admin.site.register(GroupMembership)
+
 # --- ইউজার প্রোগ্রেস অ্যাডমিন (অপরিবর্তিত) ---
 @admin.register(UserLessonProgress)
 class UserLessonProgressAdmin(admin.ModelAdmin):
-    # ... (কোড অপরিবর্তিত) ...
     list_display = ('user', 'lesson', 'completed_at')
     list_filter = ('user', 'lesson__unit__course')
     search_fields = ('user__username', 'lesson__title')
 
 @admin.register(UserQuizAttempt)
 class UserQuizAttemptAdmin(admin.ModelAdmin):
-    # ... (কোড অপরিবর্তিত) ...
     list_display = ('user', 'quiz', 'score', 'total_points', 'attempted_at')
     list_filter = ('user', 'quiz__quiz_type')
     search_fields = ('user__username', 'quiz__title')
 
 @admin.register(UserEnrollment)
 class UserEnrollmentAdmin(admin.ModelAdmin):
-    # ... (কোড অপরিবর্তিত) ...
     list_display = ('user', 'course', 'enrolled_at')
     list_filter = ('user', 'course')
     search_fields = ('user__username', 'course__title')

@@ -1,17 +1,25 @@
 # api/serializers.py
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from django.db.models import Sum
+from django.db.models import Sum, F, Window, IntegerField
+from django.db.models.functions import Rank
 from .models import (
     Category, Course, Unit, Lesson, 
     Quiz, Question, Choice,
     UserLessonProgress, UserQuizAttempt,
-    UserEnrollment,
-    # --- গেমের মডেল দুটি ইম্পোর্ট করুন ---
-    MatchingGame, GamePair
+    UserEnrollment, MatchingGame, GamePair,
+    LearningGroup, GroupMembership 
 )
 
-# --- নতুন: ম্যাচিং গেমের সিরিয়ালাইজার ---
+# --- নতুন: মিনি কোর্স সিরিয়ালাইজার যোগ করা হয়েছে (ধাপ ১-এর ক) ---
+class MiniCourseSerializer(serializers.ModelSerializer):
+    """শুধুমাত্র গ্রুপের জন্য কোর্সের আইডি ও টাইটেল দেখানোর জন্য ব্যবহৃত"""
+    class Meta:
+        model = Course
+        fields = ['id', 'title']
+# -----------------------------------------------------------
+
+# ... (GamePairSerializer, MatchingGameSerializer, ChoiceSerializer, QuestionSerializer, QuizSerializer, LessonSerializer, UnitSerializer, CourseSerializer, CategorySerializer অপরিবর্তিত) ...
 class GamePairSerializer(serializers.ModelSerializer):
     class Meta:
         model = GamePair
@@ -22,10 +30,7 @@ class MatchingGameSerializer(serializers.ModelSerializer):
     class Meta:
         model = MatchingGame
         fields = ['id', 'title', 'game_type', 'lesson', 'unit', 'order', 'pairs']
-# --- গেম সিরিয়ালাইজার শেষ ---
 
-
-# ... (ChoiceSerializer, QuestionSerializer, QuizSerializer, LessonSerializer অপরিবর্তিত থাকবে) ...
 class ChoiceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Choice
@@ -35,7 +40,7 @@ class QuestionSerializer(serializers.ModelSerializer):
     choices = ChoiceSerializer(many=True, read_only=True)
     class Meta:
         model = Question
-        fields = ['id', 'text', 'points', 'choices', 'explanation'] # <-- 'explanation' যোগ করা আছে
+        fields = ['id', 'text', 'points', 'choices', 'explanation'] 
 
 class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
@@ -45,16 +50,15 @@ class QuizSerializer(serializers.ModelSerializer):
 
 class LessonSerializer(serializers.ModelSerializer):
     quizzes = QuizSerializer(many=True, read_only=True)
-    matching_games = MatchingGameSerializer(many=True, read_only=True) # <-- গেম যোগ করা হয়েছে
+    matching_games = MatchingGameSerializer(many=True, read_only=True) 
     class Meta:
         model = Lesson
         fields = ['id', 'title', 'order', 'youtube_video_id', 'article_body', 'quizzes', 'matching_games']
 
-# --- UnitSerializer আপডেট করা হয়েছে ---
 class UnitSerializer(serializers.ModelSerializer):
     lessons = LessonSerializer(many=True, read_only=True)
     quizzes = QuizSerializer(many=True, read_only=True) 
-    matching_games = MatchingGameSerializer(many=True, read_only=True) # <-- গেম যোগ করা হয়েছে
+    matching_games = MatchingGameSerializer(many=True, read_only=True) 
     
     total_possible_points = serializers.SerializerMethodField()
     user_earned_points = serializers.SerializerMethodField()
@@ -64,7 +68,7 @@ class UnitSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'order', 
             'lessons', 'quizzes', 
-            'matching_games', # <-- নতুন ফিল্ড যোগ করা হয়েছে
+            'matching_games', 
             'total_possible_points', 'user_earned_points' 
         ]
 
@@ -92,8 +96,6 @@ class UnitSerializer(serializers.ModelSerializer):
         ).aggregate(Sum('score'))['score__sum'] or 0
         return earned_points
 
-
-# ... (CourseSerializer, CategorySerializer অপরিবর্তিত থাকবে) ...
 class CourseSerializer(serializers.ModelSerializer):
     units = UnitSerializer(many=True, read_only=True) 
     total_possible_points = serializers.SerializerMethodField()
@@ -144,8 +146,6 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id', 'name', 'courses']
 
-
-# --- RegisterSerializer (ইমেইল সহ) ---
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True) 
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
@@ -183,10 +183,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password']
         )
         return user
-# --- RegisterSerializer শেষ ---
 
-
-# ... (বাকি সিরিয়ালাইজারগুলো অপরিবর্তিত) ...
 class UserLessonProgressSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserLessonProgress
@@ -206,9 +203,59 @@ class DashboardSerializer(serializers.Serializer):
     my_courses = DashboardCourseSerializer(many=True)
     total_points = serializers.IntegerField()
 
-# --- (গুরুত্বপূর্ণ) প্রোফাইল সিরিয়ালাইজারটি যোগ করুন ---
 class ProfileSerializer(serializers.Serializer):
     username = serializers.CharField()
     email = serializers.EmailField()
     total_points = serializers.IntegerField()
-# --- পরিবর্তন শেষ ---
+
+
+class GroupMemberUserSerializer(serializers.ModelSerializer):
+    """গ্রুপ মেম্বারশিপের জন্য ইউজারের বেসিক তথ্য (ইউজারনেম, আইডি)"""
+    class Meta:
+        model = User
+        fields = ['id', 'username']
+
+class GroupMembershipSerializer(serializers.ModelSerializer):
+    user = GroupMemberUserSerializer(read_only=True)
+    class Meta:
+        model = GroupMembership
+        fields = ['user', 'is_group_admin', 'joined_at']
+
+class LearningGroupSerializer(serializers.ModelSerializer):
+    admin = GroupMemberUserSerializer(read_only=True)
+    
+    # FIX: কোর্সের নাম দেখানোর জন্য নতুন রিড-অনলি ফিল্ড যোগ করা হয়েছে
+    courses_detail = MiniCourseSerializer(source='courses', many=True, read_only=True)
+    
+    # গ্রুপ তৈরি বা আপডেটের জন্য আইডি গ্রহণ করার ফিল্ড (write_only)
+    courses = serializers.PrimaryKeyRelatedField(many=True, queryset=Course.objects.all(), write_only=True, required=False) 
+    
+    member_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = LearningGroup
+        # FIX: 'courses_detail' আউটপুট ফিল্ড হিসেবে যুক্ত
+        fields = ['id', 'title', 'admin', 'courses', 'courses_detail', 'created_at', 'member_count']
+        # FIX: 'courses' এখন ইনপুট হিসেবে Write Only
+        read_only_fields = ['admin', 'member_count', 'courses_detail'] 
+
+    def get_member_count(self, obj):
+        return obj.memberships.count()
+        
+    def create(self, validated_data):
+        validated_data['admin'] = self.context['request'].user
+        courses = validated_data.pop('courses', [])
+        group = LearningGroup.objects.create(**validated_data)
+        group.courses.set(courses)
+        
+        GroupMembership.objects.create(
+            group=group, 
+            user=group.admin, 
+            is_group_admin=True
+        )
+        return group
+        
+class LeaderboardEntrySerializer(serializers.Serializer):
+    rank = serializers.IntegerField(help_text="গ্রুপের মধ্যে ইউজারের র‍্যাঙ্ক")
+    username = serializers.CharField(help_text="ব্যবহারকারীর ইউজারনেম") 
+    total_score = serializers.IntegerField(help_text="গ্রুপে অন্তর্ভুক্ত কোর্স থেকে অর্জিত মোট পয়েন্ট")
