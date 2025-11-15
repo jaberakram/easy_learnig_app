@@ -1,173 +1,255 @@
 // screens/ProfileScreen.js
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, RefreshControl, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, RefreshControl, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
+// ----------------------------------------
+
 export default function ProfileScreen() {
-  // AuthContext থেকে logout ফাংশন, টোকেন এবং URL নিন
-  const { logout, userToken, API_URL_BASE } = useAuth();
+    const { logout, userToken, API_URL_BASE } = useAuth();
+    const [profileData, setProfileData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-  const [loading, setLoading] = useState(true);
-  const [profileData, setProfileData] = useState(null);
-  const [error, setError] = useState(null);
-
-  // --- প্রোফাইল ডেটা আনার ফাংশন ---
-  const fetchProfile = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await fetch(`${API_URL_BASE}/api/profile/`, { // <-- নতুন API URL
-        headers: {
-          'Authorization': `Token ${userToken}`, // <-- টোকেন পাঠানো হচ্ছে
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('প্রোফাইলের তথ্য আনতে সমস্যা হয়েছে।');
-      }
-
-      const json = await response.json();
-      setProfileData(json); // <-- ডেটা state-এ সেভ করুন
-
-    } catch (e) {
-      console.error('Profile fetch error', e);
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [userToken, API_URL_BASE]); // <-- ডিপেন্ডেন্সি
-
-  // --- useFocusEffect ---
-  // এই স্ক্রিনে এলেই ডেটা রিফ্রেশ হবে
-  useFocusEffect(
-    useCallback(() => {
-      fetchProfile();
-    }, [fetchProfile]) // <-- ডিপেন্ডেন্সি
-  );
-
-  // --- রেন্ডারিং ---
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.loaderContainer}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={styles.loaderContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-          <Text style={styles.buttonText}>লগআউট করুন</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
-
-  // --- সফলভাবে লোড হলে প্রোফাইল দেখান ---
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        style={styles.container}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={fetchProfile} />
+    // --- প্রোফাইল ডেটা লোড করা ---
+    const fetchProfileData = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await fetch(`${API_URL_BASE}/api/profile/`, {
+                headers: {
+                    'Authorization': `Token ${userToken}`,
+                },
+            });
+            if (!response.ok) {
+                throw new Error('প্রোফাইলের তথ্য আনতে সমস্যা হয়েছে।');
+            }
+            const data = await response.json();
+            setProfileData(data);
+        } catch (e) {
+            console.error(e);
+            setError(e.message);
+        } finally {
+            setLoading(false);
         }
-      >
-        {/* --- ইউজার ইনফো কার্ড --- */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>ইমেইল</Text>
-          <Text style={styles.infoValue}>{profileData?.email}</Text>
-          
-          <Text style={styles.infoLabel}>ইউজারনেম</Text>
-          <Text style={styles.infoValue}>{profileData?.username}</Text>
-        </View>
+    }, [userToken, API_URL_BASE]);
 
-        {/* --- মোট পয়েন্ট কার্ড --- */}
-        <View style={styles.pointsCard}>
-          <Text style={styles.pointsLabel}>আপনার মোট পয়েন্ট</Text>
-          <Text style={styles.pointsValue}>
-            {profileData?.total_points || 0}
-          </Text>
-        </View>
+    useFocusEffect(
+        useCallback(() => {
+            fetchProfileData();
+        }, [fetchProfileData])
+    );
 
-        {/* --- লগআউট বাটন --- */}
-        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-          <Text style={styles.buttonText}>লগআউট করুন</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </SafeAreaView>
-  );
+    // --- লগআউট কনফার্মেশন ---
+    const handleLogout = () => {
+        Alert.alert(
+            "লগআউট",
+            "আপনি কি নিশ্চিতভাবে লগআউট করতে চান?",
+            [
+                {
+                    text: "না",
+                    style: "cancel"
+                },
+                { 
+                    text: "হ্যাঁ", 
+                    onPress: () => logout(),
+                    style: "destructive"
+                }
+            ]
+        );
+    };
+    
+    // --- লোডিং বা এরর অবস্থা ---
+    if (loading && !profileData) {
+        return (
+            <SafeAreaView style={styles.loaderContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+            </SafeAreaView>
+        );
+    }
+
+    if (error && !profileData) {
+        return (
+            <SafeAreaView style={styles.loaderContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+            </SafeAreaView>
+        );
+    }
+
+    return (
+        <SafeAreaView style={styles.safeArea}>
+            <ScrollView
+                contentContainerStyle={styles.container}
+                refreshControl={
+                    <RefreshControl refreshing={loading} onRefresh={fetchProfileData} colors={[COLORS.primary]} />
+                }
+            >
+                {/* --- প্রোফাইল হেডার --- */}
+                <View style={styles.header}>
+                    <View style={styles.avatar}>
+                        <Ionicons name="person" size={60} color={COLORS.primary} />
+                    </View>
+                    <Text style={styles.username}>{profileData?.username || 'Username'}</Text>
+                    <Text style={styles.email}>{profileData?.email || 'email@example.com'}</Text>
+                </View>
+
+                {/* --- স্ট্যাটাস কার্ড (পয়েন্ট) --- */}
+                <View style={styles.statsCard}>
+                    <Ionicons name="trophy" size={30} color={COLORS.promoBg} />
+                    <View style={styles.statContent}>
+                        <Text style={styles.statValue}>{profileData?.total_points || 0}</Text>
+                        <Text style={styles.statLabel}>Total Points Earned</Text>
+                    </View>
+                </View>
+
+                {/* --- সেটিংস মেনু (উদাহরণ) --- */}
+                <View style={styles.menuContainer}>
+                    <Text style={styles.menuHeader}>Settings</Text>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert("Coming Soon", "এই ফিচারটি শীঘ্রই আসছে।")}>
+                        <Ionicons name="keypad-outline" size={22} color={COLORS.textLight} />
+                        <Text style={styles.menuItemText}>Change Password</Text>
+                        <Ionicons name="chevron-forward" size={22} color={COLORS.textLight} />
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert("Coming Soon", "এই ফিচারটি শীঘ্রই আসছে।")}>
+                        <Ionicons name="notifications-outline" size={22} color={COLORS.textLight} />
+                        <Text style={styles.menuItemText}>Notifications</Text>
+                        <Ionicons name="chevron-forward" size={22} color={COLORS.textLight} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.menuItem} onPress={() => Alert.alert("Contact", "যেকোনো প্রয়োজনে আমাদের সাথে যোগাযোগ করুন।")}>
+                        <Ionicons name="help-buoy-outline" size={22} color={COLORS.textLight} />
+                        <Text style={styles.menuItemText}>Help & Support</Text>
+                        <Ionicons name="chevron-forward" size={22} color={COLORS.textLight} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* --- লগআউট বাটন --- */}
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <Ionicons name="log-out-outline" size={22} color={COLORS.error} />
+                    <Text style={styles.logoutButtonText}>লগআউট</Text>
+                </TouchableOpacity>
+
+            </ScrollView>
+        </SafeAreaView>
+    );
 }
 
-// --- স্টাইল ---
+// --- স্টাইল (থিম কালার ব্যবহার করে আপডেট) ---
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  loaderContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  container: {
-    flex: 1,
-    padding: 15,
-  },
-  errorText: {
-    color: 'red',
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  infoCard: {
-    backgroundColor: 'white',
-    borderRadius: 10,
-    padding: 20,
-    marginBottom: 20,
-    elevation: 3,
-  },
-  infoLabel: {
-    fontSize: 16,
-    color: 'gray',
-  },
-  infoValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 15,
-  },
-  pointsCard: {
-    backgroundColor: '#007bff',
-    borderRadius: 10,
-    padding: 20,
-    alignItems: 'center',
-    marginBottom: 20,
-    elevation: 4,
-  },
-  pointsLabel: {
-    fontSize: 18,
-    color: '#e0e0e0',
-  },
-  pointsValue: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  logoutButton: {
-    backgroundColor: '#dc3545',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 10, 
-  },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+    safeArea: {
+        flex: 1,
+        backgroundColor: COLORS.background, // পরিবর্তন
+    },
+    loaderContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: COLORS.background, // পরিবর্তন
+    },
+    container: {
+        padding: 20,
+    },
+    errorText: {
+        color: COLORS.error, // পরিবর্তন
+        fontSize: 16,
+    },
+    header: {
+        alignItems: 'center',
+        marginBottom: 30,
+    },
+    avatar: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: COLORS.white, // পরিবর্তন
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: COLORS.primary, // পরিবর্তন
+        marginBottom: 15,
+    },
+    username: {
+        fontSize: 24,
+        fontWeight: 'bold',
+        color: COLORS.accent, // পরিবর্তন
+    },
+    email: {
+        fontSize: 16,
+        color: COLORS.textLight, // পরিবর্তন
+        marginTop: 4,
+    },
+    statsCard: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.white, // পরিবর্তন
+        padding: 20,
+        borderRadius: 10,
+        marginBottom: 30,
+        borderLeftWidth: 5,
+        borderLeftColor: COLORS.promoBg, // পরিবর্তন (হলুদ)
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    statContent: {
+        marginLeft: 15,
+    },
+    statValue: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: COLORS.accent, // পরিবর্তন
+    },
+    statLabel: {
+        fontSize: 14,
+        color: COLORS.textLight, // পরিবর্তন
+        marginTop: 2,
+    },
+    menuContainer: {
+        marginBottom: 30,
+    },
+    menuHeader: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: COLORS.text, // পরিবর্তন
+        marginBottom: 10,
+    },
+    menuItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: COLORS.white, // পরিবর্তন
+        paddingVertical: 15,
+        paddingHorizontal: 15,
+        borderRadius: 8,
+        marginBottom: 10,
+    },
+    menuItemText: {
+        flex: 1,
+        fontSize: 16,
+        color: COLORS.text, // পরিবর্তন
+        marginLeft: 15,
+    },
+    logoutButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: COLORS.white, // পরিবর্তন
+        padding: 15,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: COLORS.error + '50', // পরিবর্তন (হালকা লাল বর্ডার)
+    },
+    logoutButtonText: {
+        color: COLORS.error, // পরিবর্তন
+        fontSize: 16,
+        fontWeight: 'bold',
+        marginLeft: 10,
+    },
 });

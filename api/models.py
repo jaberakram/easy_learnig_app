@@ -1,218 +1,179 @@
 # api/models.py
-
 from django.db import models
-from django_ckeditor_5.fields import CKEditor5Field
-from django.conf import settings 
-from django.contrib.auth.models import User 
+from django.contrib.auth.models import User
+from django.db.models import Sum, Q, F, Window, IntegerField
+from django.db.models.functions import Rank
+from django_ckeditor_5.fields import CKEditor5Field # CKEditor
 
-# ১. বিষয় (Category) মডেল (অপরিবর্তিত)
+# === মডেল ===
+
 class Category(models.Model):
     name = models.CharField(max_length=100)
-
+    
     def __str__(self):
         return self.name
 
-    class Meta:
-        verbose_name_plural = "Categories" 
-
-# ২. কোর্স (Course) মডেল (অপরিবর্তিত)
 class Course(models.Model):
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='courses')
     title = models.CharField(max_length=200)
-    description = models.TextField(blank=True, null=True)
-    category = models.ForeignKey(Category, related_name='courses', on_delete=models.SET_NULL, null=True)
-    is_premium = models.BooleanField(default=False)
+    description = models.TextField()
+    is_premium = models.BooleanField(default=False) 
 
     def __str__(self):
         return self.title
 
-# ৩. ইউনিট (Unit) মডেল (অপরিবর্তিত)
 class Unit(models.Model):
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='units')
     title = models.CharField(max_length=200)
-    course = models.ForeignKey(Course, related_name='units', on_delete=models.CASCADE)
-    order = models.PositiveIntegerField(default=0) 
-
+    order = models.PositiveIntegerField(default=1)
+    
     class Meta:
-        ordering = ['order'] 
+        ordering = ['order']
 
     def __str__(self):
         return f"{self.course.title} - Unit {self.order}: {self.title}"
 
-# ৪. লেসন (Lesson) মডেল (অপরিবর্তিত)
 class Lesson(models.Model):
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name='lessons')
     title = models.CharField(max_length=200)
-    unit = models.ForeignKey(Unit, related_name='lessons', on_delete=models.CASCADE)
-    order = models.PositiveIntegerField(default=0) 
-    youtube_video_id = models.CharField(max_length=50, blank=True, null=True, help_text="YouTube ভিডিওর ID দিন (যেমন: dQw4w9WgXcQ)")
-    article_body = CKEditor5Field('Article Content', blank=True, null=True)
-
+    order = models.PositiveIntegerField(default=1)
+    
+    # কন্টেন্ট টাইপ
+    youtube_video_id = models.CharField(max_length=50, blank=True, null=True)
+    article_body = CKEditor5Field('Article', blank=True, null=True)
+    
     class Meta:
-        ordering = ['order'] 
+        ordering = ['order']
 
     def __str__(self):
-        return f"{self.unit.course.title} - {self.unit.title} - Lesson {self.order}: {self.title}"
-    
-# ৫. কুইজ (Quiz) মডেল (অপরিবর্তিত)
+        return f"{self.unit.title} - Lesson {self.order}: {self.title}"
+
+# === কুইজ সিস্টেম ===
+
 class Quiz(models.Model):
-    class QuizType(models.TextChoices):
-        LESSON_QUIZ = 'LESSON', 'Lesson Quiz'
-        UNIT_QUIZ = 'UNIT', 'Unit Quiz (Mastery)'
+    QUIZ_TYPES = (
+        ('LESSON', 'Lesson Quiz'),
+        ('UNIT', 'Unit Mastery Quiz'),
+    )
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='quizzes', blank=True, null=True)
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name='quizzes', blank=True, null=True)
     title = models.CharField(max_length=200)
-    quiz_type = models.CharField(max_length=10, choices=QuizType.choices)
-    lesson = models.ForeignKey(Lesson, related_name='quizzes', on_delete=models.CASCADE, null=True, blank=True,
-                               help_text="যদি এটি 'Lesson Quiz' হয় তবে এখানে লেসনটি লিঙ্ক করুন")
-    unit = models.ForeignKey(Unit, related_name='quizzes', on_delete=models.CASCADE, null=True, blank=True,
-                             help_text="যদি এটি 'Unit Quiz' হয় তবে এখানে ইউনিটটি লিঙ্ক করুন")
-    order = models.PositiveIntegerField(default=0) 
-    class Meta:
-        ordering = ['order']
-        verbose_name_plural = "Quizzes"
+    quiz_type = models.CharField(max_length=10, choices=QUIZ_TYPES, default='LESSON')
+    
     def __str__(self):
-        return f"{self.quiz_type}: {self.title}"
+        return self.title
 
-# ৬. প্রশ্ন (Question) মডেল (অপরিবর্তিত, 'explanation' সহ)
 class Question(models.Model):
-    quiz = models.ForeignKey(Quiz, related_name='questions', on_delete=models.CASCADE)
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='questions')
     text = models.TextField()
-    points = models.PositiveIntegerField(default=10, help_text="এই প্রশ্নের জন্য কত পয়েন্ট") 
-    explanation = models.TextField(blank=True, null=True, help_text="উত্তরটি কেন সঠিক তার ব্যাখ্যা (ঐচ্ছিক)")
+    points = models.PositiveIntegerField(default=1)
+    explanation = models.TextField(blank=True, null=True) 
 
     def __str__(self):
-        return self.text[:50] 
+        return self.text[:50]
 
-# ৭. অপশন (Choice) মডেল (অপরিবর্তিত)
 class Choice(models.Model):
-    question = models.ForeignKey(Question, related_name='choices', on_delete=models.CASCADE)
-    text = models.CharField(max_length=500)
-    is_correct = models.BooleanField(default=False, help_text="এটি কি সঠিক উত্তর?")
-    def __str__(self):
-        return f"{self.question.text[:30]}... -> {self.text[:30]} ({self.is_correct})"
-    
-# ৮. ইউজার লেসন প্রোগ্রেস (অপরিবর্তিত)
-class UserLessonProgress(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE)
-    completed_at = models.DateTimeField(auto_now_add=True) 
-    class Meta:
-        unique_together = ('user', 'lesson')
-    def __str__(self):
-        return f"{self.user.username} completed {self.lesson.title}"
-
-# ৯. ইউজার কুইজ অ্যাটেম্পট (অপরিবর্তিত)
-class UserQuizAttempt(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE)
-    score = models.PositiveIntegerField() 
-    total_points = models.PositiveIntegerField() 
-    attempted_at = models.DateTimeField(auto_now_add=True)
-    def __str__(self):
-        return f"{self.user.username} attempted {self.quiz.title} (Score: {self.score}/{self.total_points})"    
-
-# ১০. ইউজার এনরোলমেন্ট মডেল (অপরিবর্তিত)
-class UserEnrollment(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE)
-    enrolled_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('user', 'course')
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='choices')
+    text = models.CharField(max_length=200)
+    is_correct = models.BooleanField(default=False)
     
     def __str__(self):
-        return f"{self.user.username} enrolled in {self.course.title}"
+        return f"{self.question.text[:30]}... -> {self.text} ({self.is_correct})"
 
-# ১১. ম্যাচিং গেম (Matching Game) মডেল (অপরিবর্তিত)
+# === ম্যাচিং গেম ===
+
 class MatchingGame(models.Model):
-    class GameType(models.TextChoices):
-        LESSON_GAME = 'LESSON', 'Lesson Game'
-        UNIT_GAME = 'UNIT', 'Unit Game'
-        
+    GAME_TYPES = (
+        ('LESSON', 'Lesson Game'),
+        ('UNIT', 'Unit Game'),
+    )
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='matching_games', blank=True, null=True)
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name='matching_games', blank=True, null=True)
     title = models.CharField(max_length=200)
-    game_type = models.CharField(max_length=10, choices=GameType.choices, default=GameType.LESSON_GAME)
-    lesson = models.ForeignKey(Lesson, related_name='matching_games', on_delete=models.CASCADE, null=True, blank=True,
-                               help_text="যদি এটি 'Lesson Game' হয় তবে এখানে লেসনটি লিঙ্ক করুন")
-    unit = models.ForeignKey(Unit, related_name='matching_games', on_delete=models.CASCADE, null=True, blank=True,
-                             help_text="যদি এটি 'Unit Game' হয় তবে এখানে ইউনিটটি লিঙ্ক করুন")
-    order = models.PositiveIntegerField(default=0, help_text="গেমটি কত নম্বরে দেখাবে")
-
+    game_type = models.CharField(max_length=10, choices=GAME_TYPES, default='LESSON')
+    order = models.PositiveIntegerField(default=1)
+    
     class Meta:
         ordering = ['order']
-
+        
     def __str__(self):
-        return f"{self.game_type}: {self.title}"
+        return self.title
 
-# ১২. গেম পেয়ার (Game Pair) মডেল (অপরিবর্তিত)
 class GamePair(models.Model):
-    game = models.ForeignKey(MatchingGame, related_name='pairs', on_delete=models.CASCADE)
-    item_one = models.CharField(max_length=200, help_text="কার্ড ১ (যেমন: Apple)")
-    item_two = models.CharField(max_length=200, help_text="কার্ড ২ (যেমন: আপেল)")
-
+    game = models.ForeignKey(MatchingGame, on_delete=models.CASCADE, related_name='pairs')
+    item_one = models.CharField(max_length=100)
+    item_two = models.CharField(max_length=100)
+    
     def __str__(self):
         return f"{self.item_one} <-> {self.item_two}"
 
+# === ইউজার প্রোগ্রেস ===
 
-# ১৩. লার্নিং গ্রুপ (LearningGroup) মডেল (অপরিবর্তিত)
+# --- UserLessonProgress মডেলটি মুছে ফেলা হয়েছে ---
+# class UserLessonProgress(models.Model):
+#    ...
+# ------------------------------------------
+
+class UserQuizAttempt(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='quiz_attempts')
+    quiz = models.ForeignKey(Quiz, on_delete=models.CASCADE, related_name='attempts')
+    score = models.PositiveIntegerField()
+    total_points = models.PositiveIntegerField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.quiz.title} ({self.score}/{self.total_points})"
+
+class UserEnrollment(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_enrollments')
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='enrollments')
+    enrolled_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('user', 'course')
+        
+    def __str__(self):
+        return f"{self.user.username} enrolled in {self.course.title}"
+
+# === স্টাডি গ্রুপ ===
+
 class LearningGroup(models.Model):
-    title = models.CharField(max_length=200, help_text="গ্রুপের নাম")
-    admin = models.ForeignKey(
-        settings.AUTH_USER_MODEL, 
-        related_name='owned_groups', 
-        on_delete=models.CASCADE,
-        help_text="গ্রুপের অ্যাডমিন"
-    )
-    courses = models.ManyToManyField(
-        'Course', 
-        related_name='groups',
-        blank=True,
-        help_text="এই গ্রুপে অন্তর্ভুক্ত কোর্সসমূহ"
-    )
+    title = models.CharField(max_length=200)
+    admin = models.ForeignKey(User, on_delete=models.CASCADE, related_name='admin_groups')
+    courses = models.ManyToManyField(Course, related_name='learning_groups', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-
+    
     def __str__(self):
         return self.title
 
-    class Meta:
-        ordering = ['-created_at']
-
-# ১৪. গ্রুপ মেম্বারশিপ (GroupMembership) মডেল (অপরিবর্তিত)
 class GroupMembership(models.Model):
-    group = models.ForeignKey(LearningGroup, related_name='memberships', on_delete=models.CASCADE)
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='group_memberships', on_delete=models.CASCADE)
-    is_group_admin = models.BooleanField(default=False, help_text="ইউজার কি এই গ্রুপের অ্যাডমিন?")
+    group = models.ForeignKey(LearningGroup, on_delete=models.CASCADE, related_name='memberships')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='learning_groups')
+    is_group_admin = models.BooleanField(default=False)
     joined_at = models.DateTimeField(auto_now_add=True)
-
+    
     class Meta:
-        unique_together = ('group', 'user') 
-        ordering = ['joined_at']
+        unique_together = ('group', 'user')
 
     def __str__(self):
-        return f"{self.user.username} is member of {self.group.title}"
+        return f"{self.user.username} in {self.group.title}"
 
+# === অ্যাডমিন নোটিশ ===
 
-# --- নতুন: ১৫. নোটিশ (Notice) মডেল ---
 class Notice(models.Model):
-    title = models.CharField(max_length=255, help_text="নোটিশের শিরোনাম")
-    body = models.TextField(help_text="নোটিশের মূল বার্তা")
-    is_active = models.BooleanField(default=True, help_text="যদি সক্রিয় থাকে, তবে এটি হোমপেজে দেখাবে")
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.title[:50]
-
-    class Meta:
-        verbose_name_plural = "Notices"
-        ordering = ['-created_at']
-
-# --- নতুন: ১৬. প্রমোশন (Promotion) মডেল ---
-class Promotion(models.Model):
-    title = models.CharField(max_length=200, help_text="প্রমোশনের শিরোনাম (যেমন: 20% Discount)")
-    subtitle = models.CharField(max_length=255, blank=True, null=True, help_text="ছোট বর্ণনা বা ডেসক্রিপশন")
-    # প্রমোশনটিকে একটি নির্দিষ্ট কোর্সের সাথে লিঙ্ক করা (ঐচ্ছিক)
-    course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='promotions')
-    is_active = models.BooleanField(default=True, help_text="যদি সক্রিয় থাকে, তবে এটি হোমপেজে দেখাবে")
+    title = models.CharField(max_length=200)
+    body = models.TextField()
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.title
 
-    class Meta:
-        ordering = ['-created_at']
-        verbose_name_plural = "Promotions"
+class Promotion(models.Model):
+    title = models.CharField(max_length=200)
+    subtitle = models.CharField(max_length=255, blank=True, null=True)
+    course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='promotions')
+    is_active = models.BooleanField(default=True)
+    
+    def __str__(self):
+        return self.title

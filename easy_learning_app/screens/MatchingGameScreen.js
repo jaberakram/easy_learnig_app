@@ -1,311 +1,323 @@
 // screens/MatchingGameScreen.js
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
-import { useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
-// --- হেলপার ফাংশন: অ্যারে শাফল ( এলোমেলো ) করার জন্য ---
+// --- সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
+// ----------------------------------------
+
+// --- হেলপার ফাংশন: অ্যারে এলোমেলো করা ---
 function shuffleArray(array) {
-  let currentIndex = array.length, randomIndex;
-  while (currentIndex !== 0) {
-    randomIndex = Math.floor(Math.random() * currentIndex);
-    currentIndex--;
-    [array[currentIndex], array[randomIndex]] = [
-      array[randomIndex], array[currentIndex]];
-  }
-  return array;
+    let currentIndex = array.length, randomIndex;
+    while (currentIndex !== 0) {
+        randomIndex = Math.floor(Math.random() * currentIndex);
+        currentIndex--;
+        [array[currentIndex], array[randomIndex]] = [
+            array[randomIndex], array[currentIndex]];
+    }
+    return array;
 }
-// ------------------------------------
 
-// --- পরিবর্তন: navigation prop যোগ করা হয়েছে ---
-export default function MatchingGameScreen({ route, navigation }) {
-  const { gameId } = route.params;
-  const { userToken, API_URL_BASE } = useAuth();
+export default function MatchingGameScreen({ route }) {
+    const { gameId } = route.params;
+    const { userToken, API_URL_BASE } = useAuth();
+    const navigation = useNavigation();
 
-  const [loading, setLoading] = useState(true);
-  const [game, setGame] = useState(null);
-  const [error, setError] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [gameData, setGameData] = useState(null);
+    
+    // --- পরিবর্তন: একটি 'items' অ্যারের বদলে দুটি আলাদা অ্যারে ---
+    const [itemsA, setItemsA] = useState([]); // কলাম A
+    const [itemsB, setItemsB] = useState([]); // কলাম B
+    // ----------------------------------------------------
+    
+    const [selectedItem, setSelectedItem] = useState(null); // { id: '1-a', pairId: 1, type: 'a' }
+    const [matchedPairs, setMatchedPairs] = useState([]); // [1, 2, ...]
+    const [wrongPair, setWrongPair] = useState([]); // ['1-a', '2-b']
+    
+    const [gameFinished, setGameFinished] = useState(false);
 
-  // --- গেম লজিক স্টেট ---
-  const [leftItems, setLeftItems] = useState([]); 
-  const [rightItems, setRightItems] = useState([]); 
-  const [selectedLeft, setSelectedLeft] = useState(null); 
-  const [selectedRight, setSelectedRight] = useState(null); 
-  const [matchedPairs, setMatchedPairs] = useState([]); 
-  const [wrongPair, setWrongPair] = useState([]); 
-  const [isChecking, setIsChecking] = useState(false); 
-  const [gameWon, setGameWon] = useState(false);
+    // --- গেম লোড করার ফাংশন ---
+    const fetchGame = useCallback(async () => {
+        setLoading(true);
+        try {
+            const response = await fetch(`${API_URL_BASE}/api/games/${gameId}/`, {
+                headers: { 'Authorization': `Token ${userToken}` },
+            });
+            if (!response.ok) throw new Error('গেম লোড করা যায়নি।');
+            const data = await response.json();
+            setGameData(data);
+            initializeGame(data.pairs);
+        } catch (e) {
+            Alert.alert("Error", e.message);
+        } finally {
+            setLoading(false);
+        }
+    }, [gameId, userToken, API_URL_BASE]);
 
-  // --- ডেটা লোড করার ফাংশন (অপরিবর্তিত) ---
-  const fetchGame = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      setGameWon(false);
-      
-      const response = await fetch(`${API_URL_BASE}/api/matching-games/${gameId}/`, {
-        headers: {
-          'Authorization': `Token ${userToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('গেমের তথ্য আনা যায়নি।');
-      }
-      
-      const json = await response.json();
-      setGame(json);
-
-      if (json.pairs && json.pairs.length > 0) {
-        const leftCol = [];
-        const rightCol = [];
+    // --- পরিবর্তন: গেম শুরু করা (দুটি কলাম আলাদাভাবে) ---
+    const initializeGame = (pairs) => {
+        const itemsA_data = pairs.map(p => ({ id: `${p.id}-a`, text: p.item_one, pairId: p.id, type: 'a' }));
+        const itemsB_data = pairs.map(p => ({ id: `${p.id}-b`, text: p.item_two, pairId: p.id, type: 'b' }));
         
-        json.pairs.forEach((pair) => {
-          leftCol.push({ id: `left_${pair.id}`, pairId: pair.id, content: pair.item_one });
-          rightCol.push({ id: `right_${pair.id}`, pairId: pair.id, content: pair.item_two });
-        });
-        
-        setLeftItems(shuffleArray(leftCol)); 
-        setRightItems(shuffleArray(rightCol)); 
-        
-        setSelectedLeft(null);
-        setSelectedRight(null);
+        // --- প্রতিটি কলামকে আলাদাভাবে এলোমেলো করা ---
+        setItemsA(shuffleArray(itemsA_data));
+        setItemsB(shuffleArray(itemsB_data));
+
+        setSelectedItem(null);
         setMatchedPairs([]);
         setWrongPair([]);
-        setIsChecking(false);
-        
-      } else {
-        setError('এই গেমে কোনো কার্ড যোগ করা হয়নি।');
-      }
-      
-    } catch (e) {
-      console.error(e);
-      setError('একটি ত্রুটি ঘটেছে।');
-    } finally {
-      setLoading(false);
-    }
-  }, [gameId, userToken, API_URL_BASE]);
+        setGameFinished(false);
+    };
+    // -------------------------------------------------
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchGame();
-    }, [fetchGame])
-  );
+    useEffect(() => {
+        fetchGame();
+    }, [fetchGame]);
 
-  // --- চেক করার লজিক (অপরিবর্তিত) ---
-  useEffect(() => {
-    if (selectedLeft && selectedRight && !isChecking) {
-      setIsChecking(true);
-
-      if (selectedLeft.pairId === selectedRight.pairId) {
-        setMatchedPairs(prev => [...prev, selectedLeft.pairId]);
-        setSelectedLeft(null);
-        setSelectedRight(null);
-        setIsChecking(false);
-        
-        if (matchedPairs.length + 1 === game.pairs.length) {
-          setGameWon(true);
+    // --- আইটেম সিলেক্ট হ্যান্ডলার (অপরিবর্তিত) ---
+    const handleItemPress = (item) => {
+        if (matchedPairs.includes(item.pairId) || (wrongPair.length > 0)) {
+            return; 
         }
-      } else {
-        setWrongPair([selectedLeft.id, selectedRight.id]);
-        
-        setTimeout(() => {
-          setSelectedLeft(null);
-          setSelectedRight(null);
-          setWrongPair([]);
-          setIsChecking(false);
-        }, 1000); 
-      }
-    }
-  }, [selectedLeft, selectedRight]);
 
-  // --- কার্ড প্রেস হ্যান্ডলার (অপরিবর্তিত) ---
-  const handlePressLeft = (item) => {
-    if (isChecking || matchedPairs.includes(item.pairId) || selectedLeft?.id === item.id) return;
-    setSelectedLeft(item);
-  };
+        if (!selectedItem) {
+            setSelectedItem(item);
+            return;
+        }
 
-  const handlePressRight = (item) => {
-    if (isChecking || matchedPairs.includes(item.pairId) || selectedRight?.id === item.id) return;
-    setSelectedRight(item);
-  };
+        if (selectedItem.id === item.id) {
+            setSelectedItem(null);
+            return;
+        }
 
-  // --- রেন্ডারিং ---
-  if (loading) {
-    return <ActivityIndicator style={styles.loader} size="large" color="#0000ff" />;
-  }
+        if (selectedItem.type === item.type) {
+            setSelectedItem(item);
+            return;
+        }
 
-  if (error) {
-    return (
-      <View style={styles.loader}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
-    );
-  }
+        if (selectedItem.pairId === item.pairId) {
+            setMatchedPairs(prev => [...prev, item.pairId]);
+            setSelectedItem(null);
+            
+            if (matchedPairs.length + 1 === (gameData?.pairs?.length || 0)) {
+                setGameFinished(true);
+            }
+        } else {
+            setWrongPair([selectedItem.id, item.id]);
+            setSelectedItem(null);
+            setTimeout(() => {
+                setWrongPair([]);
+            }, 1000);
+        }
+    };
 
-  // --- পরিবর্তন: গেম জেতার স্ক্রিন ---
-  if (gameWon) {
-    return (
-      <View style={styles.loader}>
-        <Ionicons name="trophy" size={80} color="#FFD700" />
-        <Text style={styles.gameTitle}>অভিনন্দন!</Text>
-        <Text style={styles.gameWonText}>আপনি সফলভাবে গেমটি শেষ করেছেন।</Text>
-        
-        {/* "আবার খেলুন" বাটন */}
-        <TouchableOpacity style={styles.button} onPress={fetchGame}>
-          <Text style={styles.buttonText}>আবার খেলুন</Text>
-        </TouchableOpacity>
-        
-        {/* --- নতুন: "ফিরে যান" বাটন --- */}
-        <TouchableOpacity 
-          style={[styles.button, styles.goBackButton]} 
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.buttonText}>ইউনিটে ফিরে যান</Text>
-        </TouchableOpacity>
-        {/* --------------------------- */}
-      </View>
-    );
-  }
-  // --- পরিবর্তন শেষ ---
-
-  // --- কলাম রেন্ডার করার ফাংশন (অপরিবর্তিত) ---
-  const renderColumn = (items, side) => {
-    const handlePress = side === 'left' ? handlePressLeft : handlePressRight;
+    // --- কার্ডের স্টাইল (অপরিবর্তিত) ---
+    const getCardStyle = (item) => {
+        if (matchedPairs.includes(item.pairId)) {
+            return [styles.card, styles.matchedCard];
+        }
+        if (wrongPair.includes(item.id)) {
+            return [styles.card, styles.wrongCard];
+        }
+        if (selectedItem?.id === item.id) {
+            return [styles.card, styles.selectedCard];
+        }
+        return styles.card;
+    };
     
+    const getCardTextStyle = (item) => {
+         if (matchedPairs.includes(item.pairId) || wrongPair.includes(item.id) || selectedItem?.id === item.id) {
+             return styles.selectedCardText;
+         }
+         return styles.cardText;
+    };
+
+
+    if (loading || !gameData) {
+        return (
+            <SafeAreaView style={styles.loaderContainer}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+            </SafeAreaView>
+        );
+    }
+    
+    // --- গেম শেষ হলে (অপরিবর্তিত) ---
+    if (gameFinished) {
+        return (
+            <SafeAreaView style={styles.resultsContainer}>
+                <Ionicons name="sparkles" size={80} color={COLORS.progress} />
+                <Text style={styles.resultsTitle}>দারুণ!</Text>
+                <Text style={styles.summaryText}>আপনি সফলভাবে সবগুলো মিলিয়েছেন।</Text>
+                
+                <TouchableOpacity style={styles.button} onPress={fetchGame}>
+                    <Text style={styles.buttonText}>আবার খেলুন</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.button, styles.secondaryButton]} onPress={() => navigation.goBack()}>
+                    <Text style={[styles.buttonText, styles.secondaryButtonText]}>ফিরে যান</Text>
+                </TouchableOpacity>
+            </SafeAreaView>
+        );
+    }
+
     return (
-      <View style={styles.column}>
-        {items.map(item => {
-          const isSelected = (side === 'left' && selectedLeft?.id === item.id) || (side === 'right' && selectedRight?.id === item.id);
-          const isMatched = matchedPairs.includes(item.pairId);
-          const isWrong = (side === 'left' && wrongPair[0] === item.id) || (side === 'right' && wrongPair[1] === item.id);
-
-          return (
-            <TouchableOpacity 
-              key={item.id}
-              style={[
-                styles.card,
-                isSelected ? styles.cardSelected : null,
-                isMatched ? styles.cardMatched : null,
-                isWrong ? styles.cardWrong : null,
-              ]}
-              onPress={() => handlePress(item)}
-              disabled={isChecking || isMatched}
-            >
-              <Text style={styles.cardText}>{item.content}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+        <SafeAreaView style={styles.safeArea}>
+            <Text style={styles.title}>{gameData.title}</Text>
+            <Text style={styles.instructions}>সঠিক জোড়াগুলো মেলান</Text>
+            
+            {/* --- পরিবর্তন: লেআউট দুটি কলামে ভাগ করা --- */}
+            <ScrollView contentContainerStyle={styles.scrollContainer}>
+                <View style={styles.gameContainer}>
+                    {/* --- কলাম A --- */}
+                    <View style={styles.column}>
+                        {itemsA.map(item => (
+                            <TouchableOpacity 
+                                key={item.id} 
+                                style={getCardStyle(item)}
+                                onPress={() => handleItemPress(item)}
+                            >
+                                <Text style={getCardTextStyle(item)}>{item.text}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                    
+                    {/* --- কলাম B --- */}
+                    <View style={styles.column}>
+                        {itemsB.map(item => (
+                            <TouchableOpacity 
+                                key={item.id} 
+                                style={getCardStyle(item)}
+                                onPress={() => handleItemPress(item)}
+                            >
+                                <Text style={getCardTextStyle(item)}>{item.text}</Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </View>
+            </ScrollView>
+        </SafeAreaView>
     );
-  };
-
-  return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.gameTitle}>{game.title}</Text>
-      <Text style={styles.instructions}>বাম কলামের সাথে ডান কলামের সঠিক জোড়া মেলান</Text>
-      
-      <View style={styles.gameArea}>
-        {renderColumn(leftItems, 'left')}
-        {renderColumn(rightItems, 'right')}
-      </View>
-    </ScrollView>
-  );
 }
 
-// --- স্টাইল (নতুন বাটন স্টাইল যোগ করা হয়েছে) ---
+// --- স্টাইল (দুটি কলামের জন্য আপডেটেড) ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 10,
-    backgroundColor: '#f5f5f5',
-  },
-  loader: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: 'red',
-    textAlign: 'center',
-    padding: 20,
-    fontSize: 16,
-  },
-  gameTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginVertical: 10,
-  },
-  instructions: {
-    fontSize: 16,
-    color: 'gray',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  gameArea: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 5,
-  },
-  column: {
-    flex: 1, 
-    marginHorizontal: 5,
-  },
-  card: {
-    backgroundColor: 'white',
-    padding: 15,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#ddd',
-    marginBottom: 10,
-    minHeight: 80, 
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cardSelected: {
-    borderColor: '#007bff', 
-    backgroundColor: '#e6f2ff',
-  },
-  cardMatched: {
-    borderColor: '#28a745', 
-    backgroundColor: '#d4edda',
-    opacity: 0.6, 
-  },
-  cardWrong: {
-    borderColor: '#dc3545', 
-    backgroundColor: '#f8d7da',
-  },
-  cardText: {
-    fontSize: 16,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
-  gameWonText: {
-    fontSize: 18,
-    color: 'gray',
-    textAlign: 'center',
-    marginVertical: 10,
-  },
-  button: {
-    backgroundColor: '#007bff',
-    paddingVertical: 12,
-    paddingHorizontal: 30,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 20,
-    width: '80%', // <-- প্রস্থ ঠিক করা
-  },
-  // --- নতুন: "ফিরে যান" বাটন স্টাইল ---
-  goBackButton: {
-    backgroundColor: '#6c757d', // ধূসর রঙ
-    marginTop: 10,
-  },
-  // ------------------------------
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+    safeArea: {
+        flex: 1,
+        backgroundColor: COLORS.background, 
+    },
+    loaderContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: COLORS.background, 
+    },
+    title: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: COLORS.accent, 
+        textAlign: 'center',
+        marginTop: 10,
+    },
+    instructions: {
+        fontSize: 16,
+        color: COLORS.textLight, 
+        textAlign: 'center',
+        marginBottom: 15,
+    },
+    scrollContainer: { // নতুন স্টাইল
+        flexGrow: 1,
+    },
+    gameContainer: {
+        flex: 1, // নতুন
+        flexDirection: 'row',
+        justifyContent: 'space-between', // 'space-around' থেকে পরিবর্তন
+        padding: 10,
+    },
+    column: { // নতুন স্টাইল
+        width: '48%', // কলামের প্রস্থ (মাঝে গ্যাপ রাখার জন্য)
+        flexDirection: 'column',
+    },
+    card: {
+        width: '100%', // কলামের সম্পূর্ণ প্রস্থ
+        minHeight: 100, // উচ্চতা auto
+        backgroundColor: COLORS.white, 
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 10,
+        borderRadius: 8,
+        borderWidth: 2,
+        borderColor: COLORS.border, 
+        marginBottom: 15,
+    },
+    cardText: {
+        fontSize: 15,
+        color: COLORS.text, 
+        textAlign: 'center',
+    },
+    selectedCard: {
+        backgroundColor: COLORS.primary, 
+        borderColor: COLORS.primary, 
+    },
+    selectedCardText: {
+        fontSize: 15,
+        color: COLORS.white, 
+        textAlign: 'center',
+        fontWeight: 'bold',
+    },
+    matchedCard: {
+        backgroundColor: COLORS.green, 
+        borderColor: COLORS.green, 
+        opacity: 0.7, 
+    },
+    wrongCard: {
+        backgroundColor: COLORS.error, 
+        borderColor: COLORS.error, 
+    },
+    
+    // --- ফলাফল স্ক্রিন স্টাইল (অপরিবর্তিত) ---
+    resultsContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: COLORS.white, 
+        padding: 20,
+    },
+    resultsTitle: {
+        fontSize: 28,
+        fontWeight: 'bold',
+        color: COLORS.accent, 
+        marginTop: 15,
+    },
+    summaryText: {
+        fontSize: 18,
+        color: COLORS.textLight, 
+        textAlign: 'center',
+        marginBottom: 30,
+        marginTop: 10,
+    },
+    button: {
+        backgroundColor: COLORS.primary, 
+        padding: 18,
+        borderRadius: 8,
+        alignItems: 'center',
+        width: '100%',
+        marginBottom: 10,
+    },
+    buttonText: {
+        color: COLORS.white, 
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    secondaryButton: {
+        backgroundColor: COLORS.white, 
+        borderWidth: 1,
+        borderColor: COLORS.primary, 
+    },
+    secondaryButtonText: {
+        color: COLORS.primary, 
+    },
 });

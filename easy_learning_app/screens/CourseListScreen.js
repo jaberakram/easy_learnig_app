@@ -1,25 +1,17 @@
 // screens/CourseListScreen.js
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // <-- SafeAreaView যোগ করা হয়েছে
+import { SafeAreaView } from 'react-native-safe-area-context'; 
 import { useNavigation, useFocusEffect } from '@react-navigation/native'; 
 import { useAuth } from '../context/AuthContext'; 
-import { Ionicons } from '@expo/vector-icons'; // <-- আইকন যোগ করা হয়েছে
+import { Ionicons } from '@expo/vector-icons'; 
 
-// --- কালার প্যালেট (আপনার পছন্দের) ---
-const COLORS = {
-  background: '#F4F1DE', // Light Cream/Beige
-  primary: '#E07A5F', // Coral/Burnt Orange (Button/CTA)
-  accent: '#3D405B', // Dark Navy Blue (Text, Headings)
-  progress: '#81B29A', // Muted Teal/Green (Progress Bar)
-  promoBg: '#F2CC8F', // Muted Gold/Mustard
-  
-  text: '#3D405B', 
-  textLight: '#6B7280', 
-  white: '#FFFFFF', 
-  border: '#D1C8B4', 
-  disabled: '#A5A6A2', 
-};
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
+// ------------------------------------------
+
+// --- কালার প্যালেট (এই অংশটি মুছে ফেলা হয়েছে) ---
+// const COLORS = { ... };
 // ------------------------------------------
 
 
@@ -94,18 +86,36 @@ export default function CourseListScreen({ route }) {
 
     const isEnrolled = item.is_enrolled;
     const isLocked = item.is_premium && !isEnrolled;
-    const isCompleted = isEnrolled && percentage >= 100;
+
+    // --- নতুন স্ট্যাটাস লজিক ---
+    let statusText;
+    let isCompleted;
+    if (isEnrolled && percentage >= 100) {
+        statusText = "Completed";
+        isCompleted = true;
+    } else if (isEnrolled && percentage > 0) {
+        statusText = "In Progress";
+        isCompleted = false;
+    } else {
+        // ফ্রি কোর্স বা এনরোল না করা কোর্সের জন্য
+        statusText = "Not Started"; 
+        isCompleted = false;
+    }
+    // --- নতুন লজিক শেষ ---
+
 
     return (
       <TouchableOpacity 
         style={styles.card}
         onPress={() => {
           if (isLocked) {
+            // প্রিমিয়াম ও লকড? Paywall এ যান
             navigation.navigate('Paywall', { 
               courseId: item.id, 
               courseTitle: item.title 
             });
           } else {
+            // ফ্রি অথবা এনরোল করা? CourseDetail এ যান
             navigation.navigate('CourseDetail', {
               courseId: item.id,
               courseTitle: item.title
@@ -113,7 +123,7 @@ export default function CourseListScreen({ route }) {
           }
         }}
       >
-        {/* প্রিমিয়াম ট্যাগ */}
+        {/* প্রিমিয়াম ট্যাগ (এই লজিকটি ঠিক আছে) */}
         {item.is_premium && (
             <View style={[styles.premiumTag, isLocked && styles.lockedTag]}>
                 <Ionicons name={isLocked ? "lock-closed" : "shield-checkmark"} size={12} color={isLocked ? COLORS.white : COLORS.accent} />
@@ -129,30 +139,26 @@ export default function CourseListScreen({ route }) {
                 <Text style={styles.cardDescription} numberOfLines={2}>{item.description}</Text>
             </View>
 
-            {/* স্ট্যাটাস/প্রোগ্রেস সেকশন */}
+            {/* --- পরিবর্তিত স্ট্যাটাস/প্রোগ্রেস সেকশন --- */}
+            {/* কন্ডিশনাল (isEnrolled ? ... : ...) সরিয়ে ফেলা হয়েছে */}
             <View style={styles.statusContainer}>
-                {isEnrolled ? (
-                    // এনরোল করা থাকলে প্রোগ্রেস বার
-                    <>
-                        <Text style={[styles.statusText, isCompleted && styles.completedText]}>
-                            {isCompleted ? "Completed" : "In Progress"}
-                        </Text>
-                        <View style={styles.progressOuter}>
-                            <View style={[styles.progressInner, { width: `${percentage}%` }, isCompleted && styles.progressCompleted]} />
-                        </View>
-                        <Text style={styles.pointsText}>{earned} / {total} Points</Text>
-                    </>
-                ) : (
-                    // এনরোল করা না থাকলে বাটন
-                    <View style={[styles.enrollButton, isLocked && styles.enrollButtonPremium]}>
-                        <Text style={[styles.enrollButtonText, isLocked && styles.enrollButtonPremiumText]}>
-                            {isLocked ? "Enroll Now" : "Start Free"}
-                        </Text>
+                <>
+                    <Text style={[
+                        styles.statusText, 
+                        isCompleted && styles.completedText,
+                        !isEnrolled && !isCompleted && styles.notStartedText // "Not Started" এর জন্য স্টাইল
+                    ]}>
+                        {statusText}
+                    </Text>
+                    <View style={styles.progressOuter}>
+                        <View style={[styles.progressInner, { width: `${percentage}%` }, isCompleted && styles.progressCompleted]} />
                     </View>
-                )}
+                    <Text style={styles.pointsText}>{earned} / {total} Points</Text>
+                </>
             </View>
-        </View>
+            {/* --- পরিবর্তন শেষ --- */}
 
+        </View>
       </TouchableOpacity>
     );
   };
@@ -265,12 +271,17 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: COLORS.textLight,
+    color: COLORS.textLight, // ডিফল্ট কালার
     marginBottom: 4,
   },
   completedText: {
     color: COLORS.progress, // Muted Green
   },
+  // --- নতুন: "Not Started" স্টাইল ---
+  notStartedText: {
+    color: COLORS.textLight, // Gray
+  },
+  // --------------------------
   progressOuter: { 
     height: 6, 
     width: '100%',
@@ -290,7 +301,7 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     marginTop: 4,
   },
-  // --- এনরোল বাটন (যখন প্রোগ্রেস বার নেই) ---
+  // --- এনরোল বাটন (এই স্টাইলগুলো এখন আর ব্যবহৃত হচ্ছে না) ---
   enrollButton: {
     paddingVertical: 8,
     paddingHorizontal: 12,

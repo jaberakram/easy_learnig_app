@@ -6,7 +6,7 @@ from django.db.models.functions import Rank
 from .models import (
     Category, Course, Unit, Lesson, 
     Quiz, Question, Choice,
-    UserLessonProgress, UserQuizAttempt,
+    UserQuizAttempt, # <-- UserLessonProgress ইম্পোর্ট সরানো হয়েছে
     UserEnrollment, MatchingGame, GamePair,
     LearningGroup, GroupMembership,
     Notice, Promotion 
@@ -14,20 +14,19 @@ from .models import (
 
 # --- নতুন: মিনি কোর্স সিরিয়ালাইজার (গ্রুপের জন্য) ---
 class MiniCourseSerializer(serializers.ModelSerializer):
-    """শুধুমাত্র গ্রুপের জন্য কোর্সের আইডি ও টাইটেল দেখানোর জন্য ব্যবহৃত"""
     class Meta:
         model = Course
         fields = ['id', 'title']
 # -----------------------------------------------------------
 
-# --- FIX: GamePairSerializer কে উপরে নিয়ে আসা হয়েছে (Dependency Fix) ---
+# --- FIX: GamePairSerializer কে উপরে নিয়ে আসা হয়েছে ---
 class GamePairSerializer(serializers.ModelSerializer):
     class Meta:
         model = GamePair
         fields = ['id', 'item_one', 'item_two']
 # ----------------------------------------------------------------------
 
-# --- ম্যাচিং গেম সিরিয়ালাইজার (অগ্রগতি ট্র্যাকিং যোগ করা হয়েছে) ---
+# --- ম্যাচিং গেম সিরিয়ালাইজার (অপরিবর্তিত) ---
 class MatchingGameSerializer(serializers.ModelSerializer):
     pairs = GamePairSerializer(many=True, read_only=True) 
     is_attempted = serializers.SerializerMethodField()
@@ -40,11 +39,7 @@ class MatchingGameSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         if not user.is_authenticated:
             return False
-        # TODO: গেমের জন্য আলাদা UserGameAttempt মডেল তৈরি করা ভালো
-        # আপাতত আমরা ধরে নিচ্ছি একটি গেম সম্পন্ন হলে একটি কুইজ অ্যাটেম্পট তৈরি হয়
-        # (যদি তা না হয়, এই লজিকটি কাস্টমাইজ করতে হবে)
         
-        # আমরা এই সিরিয়ালাইজারটি CourseList-এ ব্যবহার করছি না, তাই Unit/Lesson ফোকাসড থাকাই ভালো
         if obj.unit:
              return UserQuizAttempt.objects.filter(user=user, quiz__unit=obj.unit).exists()
         if obj.lesson:
@@ -64,34 +59,49 @@ class QuestionSerializer(serializers.ModelSerializer):
         model = Question
         fields = ['id', 'text', 'points', 'choices', 'explanation'] 
 
-# --- QuizSerializer (অগ্রগতি ট্র্যাকিং যোগ করা হয়েছে) ---
+# --- QuizSerializer (অপরিবর্তিত) ---
 class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
     is_attempted = serializers.SerializerMethodField()
+    latest_score_percentage = serializers.SerializerMethodField()
     
     class Meta:
         model = Quiz
-        fields = ['id', 'title', 'quiz_type', 'lesson', 'unit', 'questions', 'is_attempted']
+        fields = [
+            'id', 'title', 'quiz_type', 'lesson', 'unit', 'questions', 
+            'is_attempted', 'latest_score_percentage'
+        ]
         
     def get_is_attempted(self, obj):
         user = self.context['request'].user
         if not user.is_authenticated:
             return False
         return UserQuizAttempt.objects.filter(user=user, quiz=obj).exists()
-
-
-# --- LessonSerializer (is_completed সরানো হয়েছে) ---
-class LessonSerializer(serializers.ModelSerializer):
-    quizzes = QuizSerializer(many=True, read_only=True) # <-- এখানে শুধু লেসন কুইজ থাকবে
-    matching_games = MatchingGameSerializer(many=True, read_only=True) 
     
-    # FIX: is_completed (UserLessonProgress ভিত্তিক) সরানো হয়েছে
+    def get_latest_score_percentage(self, obj):
+        user = self.context['request'].user
+        if not user.is_authenticated:
+            return None
+        
+        attempt = UserQuizAttempt.objects.filter(user=user, quiz=obj).first()
+        
+        if attempt and attempt.total_points > 0:
+            percentage = (attempt.score / attempt.total_points) * 100
+            return round(percentage)
+        
+        return None
+# ----------------------------------------------------
+
+
+# --- LessonSerializer (অপরিবর্তিত) ---
+class LessonSerializer(serializers.ModelSerializer):
+    quizzes = QuizSerializer(many=True, read_only=True) 
+    matching_games = MatchingGameSerializer(many=True, read_only=True) 
     
     class Meta:
         model = Lesson
         fields = ['id', 'title', 'order', 'youtube_video_id', 'article_body', 'quizzes', 'matching_games']
         
-    # FIX: LessonSerializer থেকে শুধু লেসন-সম্পর্কিত কুইজ/গেম পাঠানো হচ্ছে
     def to_representation(self, instance):
         representation = super().to_representation(instance)
         representation['quizzes'] = QuizSerializer(instance.quizzes.filter(quiz_type='LESSON'), many=True, context=self.context).data
@@ -101,23 +111,19 @@ class LessonSerializer(serializers.ModelSerializer):
 
 # --- ইউনিট ডিটেইল পেজের জন্য হালকা লেসন সিরিয়ালাইজার (is_completed সরানো হয়েছে) ---
 class UnitLessonSerializer(serializers.ModelSerializer):
-    # FIX: is_completed (UserLessonProgress ভিত্তিক) সরানো হয়েছে
     
     has_video = serializers.SerializerMethodField()
     has_article = serializers.SerializerMethodField()
     has_quiz = serializers.SerializerMethodField()
     has_game = serializers.SerializerMethodField()
     
-    # FIX: লেসনের কুইজ/গেম অ্যাটেম্পট হয়েছে কিনা তা চেক করা
+    # --- পরিবর্তন: is_attempted ফিল্ডটি স্কোর-ভিত্তিক করা হয়েছে ---
     is_attempted = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
         fields = ['id', 'title', 'order', 'has_video', 'has_article', 'has_quiz', 'has_game', 'is_attempted']
 
-    # FIX: get_is_completed মেথড সরানো হয়েছে
-
-    # (get_has_video, get_has_article, get_has_quiz, get_has_game remain)
     
     def get_has_video(self, obj):
         return bool(obj.youtube_video_id)
@@ -131,27 +137,23 @@ class UnitLessonSerializer(serializers.ModelSerializer):
     def get_has_game(self, obj):
         return MatchingGame.objects.filter(lesson=obj, game_type='LESSON').exists()
 
-    # FIX: নতুন মেথড: get_is_attempted
+    # --- পরিবর্তন: এই মেথডটি এখন শুধু কুইজ চেক করে ---
     def get_is_attempted(self, obj):
         user = self.context['request'].user
         if not user.is_authenticated:
             return False
             
-        # এই লেসনের সাথে যুক্ত কুইজ বা গেম আছে কিনা এবং তা অ্যাটেম্পট করা হয়েছে কিনা
         quiz_attempted = UserQuizAttempt.objects.filter(
             user=user, 
             quiz__lesson=obj, 
             quiz__quiz_type='LESSON'
         ).exists()
         
-        # TODO: গেমের অ্যাটেম্পট লজিক (যদি থাকে)
-        # game_attempted = UserGameAttempt.objects.filter(user=user, game__lesson=obj).exists()
-        
-        return quiz_attempted # or game_attempted
+        return quiz_attempted 
 # --------------------------------------------------------------
 
 
-# --- UnitSerializer (নতুন আর্কিটেকচার অনুযায়ী সংশোধিত) ---
+# --- UnitSerializer (অপরিবর্তিত) ---
 class UnitSerializer(serializers.ModelSerializer):
     lessons = UnitLessonSerializer(many=True, read_only=True) 
     quizzes = serializers.SerializerMethodField() 
@@ -159,11 +161,12 @@ class UnitSerializer(serializers.ModelSerializer):
     
     total_possible_points = serializers.SerializerMethodField()
     user_earned_points = serializers.SerializerMethodField()
+    course_title = serializers.CharField(source='course.title', read_only=True)
 
     class Meta:
         model = Unit
         fields = [
-            'id', 'title', 'order', 
+            'id', 'title', 'order', 'course_title',
             'lessons', 'quizzes', 
             'matching_games', 
             'total_possible_points', 'user_earned_points' 
@@ -271,7 +274,7 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
         fields = ['id', 'name', 'courses']
 
-# ... (বাকি সিরিয়ালাইজারগুলো অপরিবর্তিত) ...
+# --- RegisterSerializer (অপরিবর্তিত) ---
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True) 
     password2 = serializers.CharField(style={'input_type': 'password'}, write_only=True)
@@ -310,10 +313,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
         return user
 
-class UserLessonProgressSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = UserLessonProgress
-        fields = ['lesson']
+# --- UserLessonProgressSerializer মুছে ফেলা হয়েছে ---
+# class UserLessonProgressSerializer(serializers.ModelSerializer):
+#    ...
+# ------------------------------------------------
 
 class UserQuizAttemptSerializer(serializers.ModelSerializer):
     class Meta:
@@ -332,7 +335,6 @@ class ProfileSerializer(serializers.Serializer):
 
 
 class GroupMemberUserSerializer(serializers.ModelSerializer):
-    """গ্রুপ মেম্বারশিপের জন্য ইউজারের বেসিক তথ্য (ইউজারনেম, আইডি)"""
     class Meta:
         model = User
         fields = ['id', 'username']

@@ -2,7 +2,12 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Alert, TouchableOpacity, SafeAreaView } from 'react-native';
 import YoutubeIframe from 'react-native-youtube-iframe';
-import { useAuth } from '../context/AuthContext'; // <-- AuthContext ইম্পোর্ট করুন
+import { useAuth } from '../context/AuthContext'; 
+
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+// ----------------------------------------
 
 /**
  * --- হেলপার ফাংশন ---
@@ -25,35 +30,15 @@ const getYouTubeId = (urlOrId) => {
 export default function LessonVideoScreen({ route, navigation }) {
   // নেভিগেশন থেকে টাইটেল ও ভিডিও আইডি রিসিভ করুন
   const { videoId: urlOrId, lessonTitle, lessonId } = route.params;
-  const { userToken, API_URL_BASE } = useAuth(); // <-- টোকেন এবং API URL নিন
+  // const { userToken, API_URL_BASE } = useAuth(); // <-- এখন আর প্রয়োজন নেই
   
   const [loading, setLoading] = useState(true);
-  const [isCompleting, setIsCompleting] = useState(false); // <-- বাটন লোডিং স্টেট
+  // const [isCompleting, setIsCompleting] = useState(false); // <-- মুছে ফেলা হয়েছে
   const videoIdToPlay = useMemo(() => getYouTubeId(urlOrId), [urlOrId]);
 
-  // --- (নতুন) লেসন সম্পন্ন করার ফাংশন ---
-  const handleMarkAsComplete = async () => {
-    setIsCompleting(true);
-    try {
-      await fetch(`${API_URL_BASE}/api/progress/lesson/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Token ${userToken}`, // <-- টোকেন পাঠানো হচ্ছে
-        },
-        body: JSON.stringify({
-          lesson: lessonId, // <-- কোন লেসনটি শেষ হলো
-        }),
-      });
-      // সফল হলে বা ব্যর্থ হলেও পেছনে ফিরে যান (আপাতত)
-      navigation.goBack();
-      
-    } catch (e) {
-      console.error('Lesson complete error', e);
-      Alert.alert('ত্রুটি', 'লেসনটি সম্পন্ন হিসেবে মার্ক করা যায়নি।');
-      setIsCompleting(false);
-    }
-  };
+  // --- (মুছে ফেলা) লেসন সম্পন্ন করার ফাংশন ---
+  // const handleMarkAsComplete = async () => { ... };
+  // --------------------------------------
 
   if (!videoIdToPlay) {
     return (
@@ -69,7 +54,7 @@ export default function LessonVideoScreen({ route, navigation }) {
 
       <View style={styles.videoPlayerContainer}>
         {loading && (
-          <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color="#0000ff" />
+          <ActivityIndicator style={StyleSheet.absoluteFill} size="large" color={COLORS.primary} />
         )}
         <YoutubeIframe
           height={loading ? 0 : 250}
@@ -82,38 +67,36 @@ export default function LessonVideoScreen({ route, navigation }) {
 
       <View style={styles.flexibleSpace} />
 
-      {/* --- (আপডেটেড) পাঠ সম্পন্ন বাটন --- */}
+      {/* --- (পরিবর্তিত) সাধারণ "ফিরে যান" বাটন --- */}
       <TouchableOpacity 
-        style={[styles.button, isCompleting ? styles.buttonDisabled : null]} 
-        onPress={handleMarkAsComplete}
-        disabled={isCompleting} // লোডিং চলাকালীন বাটন নিষ্ক্রিয়
+        style={styles.button} 
+        onPress={() => navigation.goBack()} // <-- শুধু ফিরে যাওয়ার কাজ করে
       >
-        {isCompleting ? (
-          <ActivityIndicator color="#ffffff" />
-        ) : (
-          <Text style={styles.buttonText}>✅ পাঠ সম্পন্ন (ফিরে যান)</Text>
-        )}
+        <Text style={styles.buttonText}>
+          <Ionicons name="arrow-back-outline" size={16} color={COLORS.white} /> ফিরে যান
+        </Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
-// --- স্টাইল ---
+// --- স্টাইল (থিম কালার ব্যবহার করে আপডেট) ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background, // পরিবর্তন
     padding: 15,
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 15,
+    color: COLORS.accent, // পরিবর্তন
   },
   videoPlayerContainer: {
     width: '100%',
     height: 250,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: COLORS.border, // পরিবর্তন
     borderRadius: 10,
     overflow: 'hidden',
     justifyContent: 'center',
@@ -122,31 +105,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   button: {
-    backgroundColor: '#007bff',
+    backgroundColor: COLORS.accent, // পরিবর্তন (Primary এর বদলে Accent)
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 20,
-    minHeight: 50, // লোডিং স্পিনারের জন্য
+    minHeight: 50,
     justifyContent: 'center',
+    flexDirection: 'row', // আইকনের জন্য
   },
   buttonDisabled: {
-    backgroundColor: '#aaa',
+    backgroundColor: COLORS.disabled, // পরিবর্তন
   },
   buttonText: {
-    color: 'white',
+    color: COLORS.white, // পরিবর্তন
     fontSize: 16,
     fontWeight: 'bold',
   },
   errorContainer: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white, // পরিবর্তন
     justifyContent: 'center',
     alignItems: 'center',
   },
   errorText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: 'red',
+    color: COLORS.error, // পরিবর্তন
   },
 });

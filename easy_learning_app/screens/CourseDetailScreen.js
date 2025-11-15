@@ -6,21 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-// --- কালার প্যালেট (আপনার দেওয়া নতুন প্যালেট) ---
-const COLORS = {
-  background: '#F4F1DE', // Light Cream/Beige
-  primary: '#E07A5F', // Coral/Burnt Orange (Button/CTA)
-  accent: '#3D405B', // Dark Navy Blue (Text, Headings)
-  progress: '#81B29A', // Muted Teal/Green (Progress Bar)
-  promoBg: '#F2CC8F', // Muted Gold/Mustard
-  
-  text: '#3D405B', 
-  textLight: '#6B7280', 
-  white: '#FFFFFF', 
-  border: '#D1C8B4', 
-  disabled: '#A5A6A2', 
-  error: '#FF0000',
-};
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
 // ------------------------------------------
 
 // --- অ্যানিমেশন সক্ষম করা (Android-এর জন্য) ---
@@ -45,7 +32,11 @@ const ExpandableUnit = ({ unit, courseId, courseTitle, isCourseLocked }) => {
   
   const handleUnitPress = () => {
     if (isCourseLocked) {
-      alert("অনুগ্রহ করে কোর্সে এনরোল করুন!");
+      // এই কোর্সে এনরোল করা নেই, তাই Paywall-এ পাঠানো হচ্ছে
+      navigation.navigate('Paywall', { 
+        courseId: courseId, 
+        courseTitle: courseTitle 
+      });
       return;
     }
     // ইউনিট ডিটেইল স্ক্রিনে নেভিগেট করা
@@ -145,41 +136,8 @@ export default function CourseDetailScreen({ route }) {
     }, [fetchCourseDetails])
   );
   
-  // --- কন্টিনিউ/এনরোল বাটন লজিক ---
-  const handleCtaPress = async () => {
-    if (!courseData) return;
-
-    if (courseData.is_premium && !courseData.is_enrolled) {
-      // Paywall এ নেভিগেট করা
-      navigation.navigate('Paywall', { 
-        courseId: courseData.id, 
-        courseTitle: courseData.title 
-      });
-      return;
-    }
-
-    if (!courseData.is_enrolled) {
-        // ফ্রী কোর্স এনরোলমেন্ট API কল (যদি ব্যাকএন্ডে থাকে) - এখন আমরা সরাসরি ইউনিট ডিটেইলে নেভিগেট করব
-        // ইউজারকে ইউনিট ডিটেইল স্ক্রিনে পাঠানো
-         navigation.navigate('UnitDetail', { 
-            unitId: courseData.units[0]?.id, 
-            unitTitle: courseData.units[0]?.title || courseData.title,
-            courseId: courseData.id,
-        });
-        return;
-    }
-    
-    // এনরোল করা থাকলে - প্রথম ইউনিটে নেভিগেট
-    if (courseData.units.length > 0) {
-        navigation.navigate('UnitDetail', { 
-            unitId: courseData.units[0].id, 
-            unitTitle: courseData.units[0].title,
-            courseId: courseData.id,
-        });
-    } else {
-        alert("এই কোর্সে কোনো ইউনিট যুক্ত করা হয়নি।");
-    }
-  };
+  // --- কন্টিনিউ/এনরোল বাটন লজিক (মুছে ফেলা হয়েছে) ---
+  // const handleCtaPress = async () => { ... };
 
   if (loading && !courseData) {
     return (
@@ -202,12 +160,19 @@ export default function CourseDetailScreen({ route }) {
   
   const isEnrolled = courseData.is_enrolled;
   const isPremium = courseData.is_premium;
-  const ctaLabel = isPremium && !isEnrolled ? 'Enroll (Premium)' : isEnrolled ? 'Continue Course' : 'Start Course';
-  const ctaColor = isEnrolled ? COLORS.progress : COLORS.primary;
+  
+  // --- বাটন লেবেল (এখন আর ব্যবহৃত হচ্ছে না) ---
+  // const ctaLabel = ...;
+  // const ctaColor = ...;
 
   const totalPoints = courseData.total_possible_points || 0;
   const earnedPoints = courseData.user_earned_points || 0;
   const percentage = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
+
+  // --- নতুন স্ট্যাটাস টেক্সট লজিক ---
+  const statusText = (isEnrolled || percentage > 0) 
+      ? `${percentage.toFixed(0)}% Complete` 
+      : 'Not Started';
 
 
   return (
@@ -216,31 +181,36 @@ export default function CourseDetailScreen({ route }) {
         <RefreshControl refreshing={loading} onRefresh={fetchCourseDetails} colors={[COLORS.primary]} />
       }>
         
-        {/* --- ১. Hero Section --- */}
+        {/* --- ১. Hero Section (আপডেটেড) --- */}
         <View style={styles.heroSection}>
             <Text style={styles.courseName}>{courseData.title}</Text>
             
-            {isPremium && (
+            {/* --- 프리/ফ্রি ব্যাজ কন্ডিশন --- */}
+            {isPremium ? (
                 <View style={styles.premiumBadge}>
                     <Ionicons name="lock-closed" size={16} color={COLORS.white} />
-                    <Text style={styles.premiumText}>PREMIUM CONTENT</Text>
+                    <Text style={styles.premiumText}>PREMIUM</Text>
+                </View>
+            ) : (
+                <View style={styles.freeBadge}>
+                    <Ionicons name="leaf-outline" size={16} color={COLORS.white} />
+                    <Text style={styles.freeText}>FREE COURSE</Text>
                 </View>
             )}
             
             <Text style={styles.courseDescription}>{courseData.description}</Text>
             
-            {/* প্রোগ্রেস বার (এনরোল করা থাকলে) */}
-            {isEnrolled && (
-                <View style={styles.progressSection}>
-                    <View style={styles.progressBarOuter}>
-                        <View style={[styles.progressBarInner, { width: `${percentage}%` }]} />
-                    </View>
-                    <Text style={styles.progressText}>{percentage.toFixed(0)}% Complete</Text>
+            {/* --- প্রোগ্রেস বার (এখন সবার জন্য) --- */}
+            <View style={styles.progressSection}>
+                <View style={styles.progressBarOuter}>
+                    <View style={[styles.progressBarInner, { width: `${percentage}%` }]} />
                 </View>
-            )}
+                <Text style={styles.progressText}>{statusText}</Text>
+            </View>
+
         </View>
 
-        {/* --- ২. কোর্স স্ট্যাটিস্টিকস --- */}
+        {/* --- ২. কোর্স স্ট্যাটিস্টিকস (অপরিবর্তিত) --- */}
         <View style={styles.statsGrid}>
             <View style={styles.statItem}>
                 <Ionicons name="layers-outline" size={24} color={COLORS.accent} />
@@ -283,15 +253,8 @@ export default function CourseDetailScreen({ route }) {
 
       </ScrollView>
       
-      {/* --- ৪. ফিক্সড ফুটার CTA --- */}
-      <View style={styles.footer}>
-        <TouchableOpacity onPress={handleCtaPress} style={[styles.ctaButton, { backgroundColor: ctaColor }]}>
-          <Text style={styles.ctaText}>
-            {ctaLabel}
-            <Ionicons name="arrow-forward" size={20} color={COLORS.white} style={{marginLeft: 10}} />
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* --- ৪. ফিক্সড ফুটার CTA (মুছে ফেলা হয়েছে) --- */}
+      {/* <View style={styles.footer}> ... </View> */}
 
     </SafeAreaView>
   );
@@ -312,7 +275,7 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 15,
     paddingTop: 15,
-    paddingBottom: 100, // ফুটারের জন্য জায়গা
+    paddingBottom: 20, // --- পরিবর্তন: 100 থেকে 20 করা হলো ---
   },
   errorText: {
     color: COLORS.error,
@@ -347,8 +310,26 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     alignSelf: 'flex-start',
     marginBottom: 10,
+    alignItems: 'center',
   },
   premiumText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginLeft: 5,
+  },
+  // --- নতুন: ফ্রি ব্যাজ স্টাইল ---
+  freeBadge: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.progress, // Green
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 5,
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  freeText: {
     color: COLORS.white,
     fontSize: 12,
     fontWeight: 'bold',
@@ -473,30 +454,10 @@ const styles = StyleSheet.create({
     marginTop: 20,
     fontSize: 16,
   },
-  // --- Footer CTA ---
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.white,
-    padding: 15,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    elevation: 10,
-  },
-  ctaButton: {
-    padding: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  ctaText: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  // --- Footer CTA (মুছে ফেলা হয়েছে) ---
+  // footer: { ... },
+  // ctaButton: { ... },
+  // ctaText: { ... },
   reloadButton: {
       backgroundColor: COLORS.primary,
       padding: 10,

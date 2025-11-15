@@ -6,31 +6,30 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-// --- কালার প্যালেট ---
-const COLORS = {
-  background: '#F4F1DE', // Light Cream/Beige
-  primary: '#E07A5F', // Coral/Burnt Orange (Button/CTA)
-  accent: '#3D405B', // Dark Navy Blue (Text, Headings)
-  progress: '#81B29A', // Muted Teal/Green (Completed)
-  promoBg: '#F2CC8F', // Muted Gold/Mustard
-  
-  text: '#3D405B', 
-  textLight: '#6B7280', 
-  white: '#FFFFFF', 
-  border: '#D1C8B4', 
-  disabled: '#A5A6A2', 
-};
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
 // ------------------------------------------
 
-// --- কন্টেন্ট কার্ড কম্পোনেন্ট ---
-const ContentCard = ({ icon, title, type, isCompleted, onPress }) => {
+// --- কন্টেন্ট কার্ড কম্পোনেন্ট (স্কোর ব্যাজ সহ আপডেটেড) ---
+const ContentCard = ({ icon, title, type, onPress, typeName, scorePercentage }) => {
     
-    const isCompletedStyle = isCompleted ? styles.completedCard : {};
-    const iconColor = isCompleted ? COLORS.progress : COLORS.primary;
+    let iconColor;
+    if (typeName === 'quiz') iconColor = COLORS.primary; // কুইজ = Coral
+    else if (typeName === 'game') iconColor = COLORS.progress; // গেম = Green
+    else iconColor = COLORS.accent; // Video/Article = Navy Blue
+    
+    // --- নতুন: স্কোর ব্যাজের জন্য কালার লজিক ---
+    let scoreColor = COLORS.disabled;
+    if (scorePercentage !== null && scorePercentage !== undefined) {
+        if (scorePercentage >= 80) scoreColor = COLORS.progress; // ভালো স্কোর (সবুজ)
+        else if (scorePercentage >= 50) scoreColor = COLORS.promoBg; // মাঝারি স্কোর (হলুদ)
+        else scoreColor = COLORS.primary; // কম স্কোর (Coral/Red)
+    }
+    // ------------------------------------
     
     return (
         <TouchableOpacity 
-            style={[styles.contentCard, isCompletedStyle]} 
+            style={styles.contentCard} 
             onPress={onPress}
         >
             <View style={[styles.iconContainer, { backgroundColor: iconColor + '20' }]}>
@@ -40,11 +39,16 @@ const ContentCard = ({ icon, title, type, isCompleted, onPress }) => {
                 <Text style={styles.cardTitle}>{title}</Text>
                 <Text style={styles.cardType}>{type}</Text>
             </View>
-            {isCompleted ? (
-                <Ionicons name="checkmark-circle" size={24} color={COLORS.progress} />
-            ) : (
-                <Ionicons name="chevron-forward" size={24} color={COLORS.textLight} />
+            
+            {/* --- নতুন: স্কোর ব্যাজ রেন্ডারিং --- */}
+            {typeName === 'quiz' && scorePercentage !== null && scorePercentage !== undefined && (
+                <View style={[styles.scoreBadge, { backgroundColor: scoreColor }]}>
+                    <Text style={styles.scoreText}>{scorePercentage}%</Text>
+                </View>
             )}
+            {/* ------------------------------- */}
+
+            <Ionicons name="chevron-forward" size={24} color={COLORS.textLight} style={{ marginLeft: 8 }} />
         </TouchableOpacity>
     );
 };
@@ -60,7 +64,6 @@ export default function LessonDetailScreen({ route }) {
     const [lessonData, setLessonData] = useState(null);
     const [error, setError] = useState(null);
 
-    // --- লেসন ডিটেইলস (ফুল ডেটা) লোড করা ---
     const fetchLessonDetails = useCallback(async () => {
         try {
             setLoading(true);
@@ -78,7 +81,7 @@ export default function LessonDetailScreen({ route }) {
 
             const json = await response.json();
             setLessonData(json);
-            navigation.setOptions({ title: json.title }); // হেডার টাইটেল সেট করা
+            navigation.setOptions({ title: json.title }); 
 
         } catch (e) {
             console.error('Lesson detail fetch error', e);
@@ -110,7 +113,6 @@ export default function LessonDetailScreen({ route }) {
         );
     }
     
-    // কুইজ এবং গেমগুলো ফিল্টার করা (যদি থাকে)
     const lessonQuiz = lessonData.quizzes && lessonData.quizzes[0];
     const lessonGame = lessonData.matching_games && lessonData.matching_games[0];
 
@@ -120,22 +122,18 @@ export default function LessonDetailScreen({ route }) {
                 <RefreshControl refreshing={loading} onRefresh={fetchLessonDetails} colors={[COLORS.primary]} />
             }>
                 
-                {/* --- ১. হেডার --- */}
                 <View style={styles.headerSection}>
                     <Text style={styles.lessonTitle}>{lessonData.title}</Text>
-                    {/* FIX: 'is_completed' (ভিউ ভিত্তিক) ব্যাজটি সরানো হয়েছে */}
                 </View>
 
-                {/* --- ২. কন্টেন্ট তালিকা --- */}
                 <Text style={styles.listHeader}>Lesson Content</Text>
 
-                {/* ভিডিও কার্ড */}
                 {lessonData.youtube_video_id && (
                     <ContentCard
                         icon="videocam-outline"
                         title="Watch Video"
                         type="Video Content"
-                        isCompleted={false} // FIX: ভিডিও দেখা মানেই সম্পন্ন নয়
+                        typeName="video" 
                         onPress={() => navigation.navigate('LessonVideo', { 
                             lessonId: lessonData.id, 
                             lessonTitle: lessonData.title, 
@@ -144,13 +142,12 @@ export default function LessonDetailScreen({ route }) {
                     />
                 )}
                 
-                {/* আর্টিকেল কার্ড */}
                 {lessonData.article_body && (
                     <ContentCard
-                        icon="reader-outline" // FIX: আইকন পরিবর্তন
+                        icon="reader-outline" 
                         title="Read Article"
                         type="Article Content"
-                        isCompleted={false} // FIX: আর্টিকেল পড়া মানেই সম্পন্ন নয়
+                        typeName="article" 
                         onPress={() => navigation.navigate('LessonArticle', { 
                             lessonId: lessonData.id, 
                             lessonTitle: lessonData.title, 
@@ -159,13 +156,13 @@ export default function LessonDetailScreen({ route }) {
                     />
                 )}
 
-                {/* কুইজ কার্ড */}
                 {lessonQuiz && (
                     <ContentCard
                         icon="help-circle-outline"
                         title={lessonQuiz.title}
                         type="Lesson Quiz"
-                        isCompleted={lessonQuiz.is_attempted} // FIX: শুধুমাত্র কুইজ/গেম সম্পন্ন হবে
+                        typeName="quiz" 
+                        scorePercentage={lessonQuiz.latest_score_percentage} // <-- নতুন prop পাস
                         onPress={() => navigation.navigate('QuizScreen', { 
                             quizId: lessonQuiz.id, 
                             quizTitle: lessonQuiz.title 
@@ -173,13 +170,12 @@ export default function LessonDetailScreen({ route }) {
                     />
                 )}
                 
-                {/* গেম কার্ড */}
                 {lessonGame && (
                     <ContentCard
                         icon="game-controller-outline"
                         title={lessonGame.title}
                         type="Matching Game"
-                        isCompleted={lessonGame.is_attempted} // FIX: শুধুমাত্র কুইজ/গেম সম্পন্ন হবে
+                        typeName="game" 
                         onPress={() => navigation.navigate('MatchingGame', { 
                             gameId: lessonGame.id, 
                             gameTitle: lessonGame.title 
@@ -187,7 +183,6 @@ export default function LessonDetailScreen({ route }) {
                     />
                 )}
 
-                {/* যদি কোনো কন্টেন্ট না থাকে */}
                 {!lessonData.youtube_video_id && !lessonData.article_body && !lessonQuiz && !lessonGame && (
                     <Text style={styles.emptyText}>এই লেসনে এখনো কোনো কন্টেন্ট যোগ করা হয়নি।</Text>
                 )}
@@ -197,7 +192,7 @@ export default function LessonDetailScreen({ route }) {
     );
 }
 
-// --- স্টাইল (অপরিবর্তিত) ---
+// --- স্টাইল (স্কোর ব্যাজ স্টাইল সহ) ---
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
@@ -220,7 +215,6 @@ const styles = StyleSheet.create({
         marginTop: 50,
         fontSize: 16,
     },
-    // --- Header Section ---
     headerSection: {
         paddingVertical: 10,
         marginBottom: 10,
@@ -233,7 +227,6 @@ const styles = StyleSheet.create({
         color: COLORS.accent,
         marginBottom: 8,
     },
-    // --- Content List ---
     listHeader: {
         fontSize: 20,
         fontWeight: 'bold',
@@ -253,9 +246,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 2,
-    },
-    completedCard: {
-        backgroundColor: '#F7FFF7', // খুব হালকা সবুজ
     },
     iconContainer: {
         padding: 12,
@@ -281,4 +271,18 @@ const styles = StyleSheet.create({
         marginTop: 20,
         fontSize: 16,
     },
+    // --- নতুন: স্কোর ব্যাজ স্টাইল ---
+    scoreBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 5,
+        minWidth: 40,
+        alignItems: 'center',
+    },
+    scoreText: {
+        color: COLORS.white,
+        fontSize: 12,
+        fontWeight: 'bold',
+    },
+    // --------------------------
 });

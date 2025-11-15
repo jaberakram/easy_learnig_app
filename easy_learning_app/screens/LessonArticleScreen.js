@@ -1,9 +1,15 @@
 // screens/LessonArticleScreen.js
 import React, { useState, useCallback } from 'react';
-import { ScrollView, StyleSheet, useWindowDimensions, Text, View, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { ScrollView, StyleSheet, useWindowDimensions, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator } from 'react-native';
 
 import RenderHTML from 'react-native-render-html'; 
-import { useAuth } from '../context/AuthContext'; 
+// --- useAuth ইম্পোর্ট সরানো হয়েছে ---
+// import { useAuth } from '../context/AuthContext'; 
+
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
+import { Ionicons } from '@expo/vector-icons';
+// ----------------------------------------
 
 // --- নতুন: HTML Entities Decode করার ফাংশন ---
 // এটি সার্ভার থেকে আসা Escaped HTML কে (যেমন &lt;p&gt;) সঠিক HTML (<p>) এ পরিবর্তন করবে।
@@ -23,9 +29,9 @@ const decodeHTMLEntities = (text) => {
 export default function LessonArticleScreen({ route, navigation }) {
   // নেভিগেশন থেকে আর্টিকেল বডি ও লেসন আইডি রিসিভ করুন
   const { articleBody, lessonId } = route.params;
-  const { userToken, API_URL_BASE } = useAuth(); 
+  // --- টোকেন এবং API URL সরানো হয়েছে ---
   
-  const [isCompleting, setIsCompleting] = useState(false); 
+  // const [isCompleting, setIsCompleting] = useState(false); // <-- মুছে ফেলা হয়েছে
   const { width } = useWindowDimensions();
 
   // --- পরিবর্তন: ডিকোডিং ফাংশন ব্যবহার করা হয়েছে ---
@@ -36,28 +42,9 @@ export default function LessonArticleScreen({ route, navigation }) {
   };
   // ----------------------------------------
 
-  // --- লেসন সম্পন্ন করার ফাংশন ---
-  const handleMarkAsComplete = async () => {
-    setIsCompleting(true);
-    try {
-      await fetch(`${API_URL_BASE}/api/progress/lesson/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Token ${userToken}`, 
-        },
-        body: JSON.stringify({
-          lesson: lessonId, 
-        }),
-      });
-      navigation.goBack();
-      
-    } catch (e) {
-      console.error('Lesson complete error', e);
-      Alert.alert('ত্রুটি', 'লেসনটি সম্পন্ন হিসেবে মার্ক করা যায়নি।');
-      setIsCompleting(false);
-    }
-  };
+  // --- লেসন সম্পন্ন করার ফাংশন (মুছে ফেলা হয়েছে) ---
+  // const handleMarkAsComplete = async () => { ... };
+  // ----------------------------------------
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -71,18 +58,15 @@ export default function LessonArticleScreen({ route, navigation }) {
           />
         </ScrollView>
 
-        {/* ২. (আপডেটেড) পাঠ সম্পন্ন বাটন */}
+        {/* ২. (পরিবর্তিত) সাধারণ "ফিরে যান" বাটন */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity 
-            style={[styles.button, isCompleting ? styles.buttonDisabled : null]}
-            onPress={handleMarkAsComplete}
-            disabled={isCompleting}
+            style={styles.button}
+            onPress={() => navigation.goBack()} // <-- শুধু ফিরে যাওয়ার কাজ করে
           >
-            {isCompleting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.buttonText}>✅ পাঠ সম্পন্ন (ফিরে যান)</Text>
-            )}
+            <Text style={styles.buttonText}>
+              <Ionicons name="arrow-back-outline" size={16} color={COLORS.white} /> ফিরে যান
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -90,10 +74,15 @@ export default function LessonArticleScreen({ route, navigation }) {
   );
 }
 
-// --- স্টাইল ---
+// --- স্টাইল (থিম কালার ব্যবহার করে আপডেট) ---
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: 'white' },
-  container: { flex: 1 },
+  safeArea: { 
+    flex: 1, 
+    backgroundColor: COLORS.white // পরিবর্তন
+  },
+  container: { 
+    flex: 1 
+  },
   scrollContainer: {
     flex: 1,
     paddingHorizontal: 20,
@@ -102,34 +91,60 @@ const styles = StyleSheet.create({
   buttonContainer: {
     padding: 15,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
-    backgroundColor: 'white',
+    borderTopColor: COLORS.border, // পরিবর্তন
+    backgroundColor: COLORS.white, // পরিবর্তন
   },
   button: {
-    backgroundColor: '#007bff',
+    backgroundColor: COLORS.accent, // পরিবর্তন (Primary এর বদলে Accent)
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
     minHeight: 50, 
     justifyContent: 'center',
+    flexDirection: 'row', // আইকনের জন্য
   },
   buttonDisabled: {
-    backgroundColor: '#aaa',
+    backgroundColor: COLORS.disabled, // পরিবর্তন
   },
   buttonText: {
-    color: 'white',
+    color: COLORS.white, // পরিবর্তন
     fontSize: 16,
     fontWeight: 'bold',
   },
 });
 
-// HTML ট্যাগগুলোর জন্য কাস্টম স্টাইল (অপরিবর্তিত)
+// HTML ট্যাগগুলোর জন্য কাস্টম স্টাইল (থিম কালার ব্যবহার করে আপডেট)
 const tagsStyles = {
-  body: { whiteSpace: 'normal', color: '#333', fontSize: 17, lineHeight: 26 },
-  p: { marginBottom: 15 },
-  h1: { fontSize: 30, fontWeight: 'bold', marginBottom: 10 },
-  h2: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
-  ul: { marginLeft: 15 },
-  li: { marginBottom: 8 },
-  img: { maxWidth: '100%', height: 'auto', borderRadius: 8 },
+  body: { 
+    whiteSpace: 'normal', 
+    color: COLORS.text, // পরিবর্তন
+    fontSize: 17, 
+    lineHeight: 26 
+  },
+  p: { 
+    marginBottom: 15 
+  },
+  h1: { 
+    fontSize: 30, 
+    fontWeight: 'bold', 
+    marginBottom: 10,
+    color: COLORS.accent // পরিবর্তন
+  },
+  h2: { 
+    fontSize: 24, 
+    fontWeight: 'bold', 
+    marginBottom: 8,
+    color: COLORS.accent // পরিবর্তন
+  },
+  ul: { 
+    marginLeft: 15 
+  },
+  li: { 
+    marginBottom: 8 
+  },
+  img: { 
+    maxWidth: '100%', 
+    height: 'auto', 
+    borderRadius: 8 
+  },
 };

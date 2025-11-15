@@ -6,21 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-// --- কালার প্যালেট (আপনার দেওয়া নতুন প্যালেট) ---
-const COLORS = {
-  // নতুন প্যালেট: ["#f4f1de","#e07a5f","#3d405b","#81b29a","#f2cc8f"]
-  background: '#F4F1DE', // Light Cream/Beige
-  primary: '#E07A5F', // Coral/Burnt Orange (Highlight)
-  accent: '#3D405B', // Dark Navy Blue (Text, Headings)
-  progress: '#81B29A', // Muted Teal/Green 
-  promoBg: '#F2CC8F', // Muted Gold/Mustard
-  
-  text: '#374151', 
-  textLight: '#6B7280', 
-  white: '#FFFFFF', 
-  border: '#D1C8B4', 
-  disabled: '#A5A6A2', 
-};
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
+// ------------------------------------------
+
+// --- কালার প্যালেট (এই অংশটি মুছে ফেলা হয়েছে) ---
+// const COLORS = { ... };
 // ------------------------------------------
 
 export default function ExploreScreen() {
@@ -121,7 +112,7 @@ export default function ExploreScreen() {
   );
 }
 
-// --- স্টাইল (নতুন প্যালেট এবং UI) ---
+// --- স্টাইল (অপরিবর্তিত, কারণ এটি এখন ইম্পোর্টেড COLORS ব্যবহার করবে) ---
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,

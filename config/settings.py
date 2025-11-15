@@ -10,6 +10,7 @@ ALLOWED_HOSTS = ['192.168.0.198', '127.0.0.1', 'localhost']
 # config/settings.py (অংশ বিশেষ)
 # ...
 INSTALLED_APPS = [
+    'nested_admin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

@@ -1,298 +1,291 @@
 # api/views.py
-from rest_framework import viewsets, generics, permissions, status
-from rest_framework import filters
-from rest_framework.response import Response 
-from django.db.models import Sum, Q, F 
+from rest_framework import viewsets, status, generics, permissions
+from rest_framework.response import Response
+from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.authtoken.models import Token
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
+from django.db.models import Sum, Q, F, Window
 from django.db.models.functions import Rank
-from django.db.models import Window, IntegerField
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.views import APIView
+from rest_framework.viewsets import ReadOnlyModelViewSet
+
 from .models import (
-    Category, Course, Unit, Lesson, 
-    Quiz, Question, UserLessonProgress, UserQuizAttempt,
-    UserEnrollment, MatchingGame,
+    Category, Course, Unit, Lesson, Quiz, Question, 
+    UserQuizAttempt, UserEnrollment,
+    MatchingGame,
     LearningGroup, GroupMembership,
-    Notice, Promotion 
+    Notice, Promotion
 )
 from .serializers import (
-    CategorySerializer, CourseSerializer, UnitSerializer, 
-    LessonSerializer, QuizSerializer, QuestionSerializer,
-    RegisterSerializer, UserLessonProgressSerializer, UserQuizAttemptSerializer,
-    DashboardSerializer, ProfileSerializer, MatchingGameSerializer,
-    LearningGroupSerializer, LeaderboardEntrySerializer,
-    NoticeSerializer, PromotionSerializer, HomeCourseSerializer 
+    CategorySerializer, CourseSerializer, UnitSerializer, LessonSerializer, QuizSerializer,
+    RegisterSerializer, UserQuizAttemptSerializer,
+    ProfileSerializer, LearningGroupSerializer, GroupMembershipSerializer,
+    LeaderboardEntrySerializer, DashboardSerializer, NoticeSerializer, PromotionSerializer,
+    MatchingGameSerializer
 )
-from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework.authtoken.models import Token
-from rest_framework.exceptions import PermissionDenied, NotFound
 
-# ... (IsGroupMember এবং অন্যান্য ViewSet অপরিবর্তিত) ...
-class IsGroupMember(permissions.BasePermission):
-    """শুধুমাত্র গ্রুপের মেম্বারদের দেখার এবং অ্যাডমিনদের সম্পাদনার অনুমতি দেয়।"""
-    def has_permission(self, request, view):
-        if view.action in ['list', 'create']:
-            return request.user.is_authenticated
-        
-        return True 
-        
-    def has_object_permission(self, request, view, obj):
-        if request.method in permissions.SAFE_METHODS: 
-            return GroupMembership.objects.filter(group=obj, user=request.user).exists()
-        
-        return GroupMembership.objects.filter(group=obj, user=request.user, is_group_admin=True).exists()
-
-class CategoryViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Category.objects.all()
-    serializer_class = CategorySerializer
-
-class CourseViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Course.objects.all()
-    serializer_class = CourseSerializer
-    filter_backends = [
-        DjangoFilterBackend, 
-        filters.SearchFilter
-    ]
-    filterset_fields = ['category'] 
-    search_fields = ['title', 'description'] 
-    
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context.update({"request": self.request})
-        return context
-
-class UnitViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Unit.objects.all()
-    serializer_class = UnitSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_object(self):
-        unit = super().get_object()
-        course = unit.course
-        user = self.request.user
-        if course.is_premium:
-            is_enrolled = UserEnrollment.objects.filter(user=user, course=course).exists()
-            if not is_enrolled:
-                raise PermissionDenied(detail="আপনি এই প্রিমিয়াম কোর্সে এনরোল করেননি।")
-        return unit
-
-class LessonViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Lesson.objects.all()
-    serializer_class = LessonSerializer
-
-class QuizViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Quiz.objects.all()
-    serializer_class = QuizSerializer
-
-class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Question.objects.all()
-    serializer_class = QuestionSerializer
-
-class MatchingGameViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = MatchingGame.objects.all()
-    serializer_class = MatchingGameSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-class LearningGroupViewSet(viewsets.ModelViewSet):
-    queryset = LearningGroup.objects.all() 
-    serializer_class = LearningGroupSerializer
-    permission_classes = [permissions.IsAuthenticated, IsGroupMember]
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_authenticated:
-            return LearningGroup.objects.filter(memberships__user=user).distinct()
-        return LearningGroup.objects.none()
-
-    def perform_create(self, serializer):
-        serializer.save(admin=self.request.user) 
-        
-class GroupJoinView(generics.CreateAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def create(self, request, *args, **kwargs):
-        group_id = kwargs.get('group_id')
-        try:
-            group = LearningGroup.objects.get(pk=group_id)
-        except LearningGroup.DoesNotExist:
-            raise NotFound(detail="এই গ্রুপটি খুঁজে পাওয়া যায়নি।")
-
-        if GroupMembership.objects.filter(group=group, user=request.user).exists():
-            return Response({"detail": "আপনি ইতিমধ্যেই এই গ্রুপের মেম্বার।"}, status=status.HTTP_200_OK)
-
-        is_group_admin = (request.user == group.admin)
-        GroupMembership.objects.create(group=group, user=request.user, is_group_admin=is_group_admin)
-        
-        return Response({"detail": f"আপনি সফলভাবে '{group.title}' গ্রুপে যুক্ত হয়েছেন।"}, status=status.HTTP_201_CREATED)
-
-class GroupLeaderboardView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = LeaderboardEntrySerializer
-
-    def get(self, request, *args, **kwargs):
-        group_id = kwargs.get('group_id')
-        try:
-            group = LearningGroup.objects.get(pk=group_id)
-        except LearningGroup.DoesNotExist:
-            raise NotFound(detail="এই গ্রুপটি খুঁজে পাওয়া যায়নি।")
-
-        if not GroupMembership.objects.filter(group=group, user=request.user).exists():
-            raise PermissionDenied(detail="লিডারবোর্ড দেখার জন্য আপনাকে অবশ্যই গ্রুপের মেম্বার হতে হবে।")
-
-        course_ids = group.courses.values_list('id', flat=True)
-
-        quiz_ids = Quiz.objects.filter(
-            Q(lesson__unit__course__id__in=course_ids) | Q(unit__course__id__in=course_ids)
-        ).values_list('id', flat=True).distinct()
-
-        leaderboard_data = GroupMembership.objects.filter(
-            group=group
-        ).annotate(
-            total_score=Sum(
-                F('user__userquizattempt__score'),
-                filter=Q(user__userquizattempt__quiz__id__in=quiz_ids)
-            )
-        ).order_by(
-            F('total_score').desc(nulls_last=True)
-        ).values('user__username', 'total_score')
-        
-        
-        ranked_data = []
-        last_score = -1
-        current_rank = 1 
-        
-        for index, entry in enumerate(leaderboard_data):
-            score = entry['total_score'] or 0
-            
-            if score < last_score:
-                current_rank = index + 1 
-            
-            last_score = score
-            
-            if index > 0 and score == leaderboard_data[index-1]['total_score']:
-                final_rank = ranked_data[index-1]['rank']
-            else:
-                 final_rank = current_rank
-
-            ranked_data.append({
-                'rank': final_rank,
-                'username': entry['user__username'], 
-                'total_score': score,
-            })
-        
-        serializer = self.get_serializer(ranked_data, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class DashboardView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = DashboardSerializer 
-    
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context.update({"request": self.request})
-        return context
-
-    def get(self, request, *args, **kwargs):
-        user = request.user
-        
-        completed_lesson_courses = Course.objects.filter(units__lessons__userlessonprogress__user=user).distinct()
-        attempted_quiz_courses = Course.objects.filter(units__lessons__quizzes__userquizattempt__user=user).distinct()
-        attempted_mastery_quiz_courses = Course.objects.filter(units__quizzes__userquizattempt__user=user).distinct()
-        
-        # FIX: আমরা এখন UserEnrollment-এর উপর ভিত্তি করে কোর্স দেখাব
-        enrolled_courses = Course.objects.filter(userenrollment__user=user).distinct()
-        
-        # সব কোর্স একত্রিত করা
-        my_courses = (completed_lesson_courses | attempted_quiz_courses | attempted_mastery_quiz_courses | enrolled_courses).distinct()
-
-        latest_notice = Notice.objects.filter(is_active=True).order_by('-created_at').first()
-        latest_promotion = Promotion.objects.filter(is_active=True).order_by('-created_at').first()
-
-        data = {
-            'my_courses': my_courses,
-            'notice': latest_notice,
-            'promotion': latest_promotion,
-        }
-        
-        serializer = self.get_serializer(data) 
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-
-class RegisterView(generics.GenericAPIView):
-    serializer_class = RegisterSerializer
-    def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+# --- অথেন্টিকেশন ভিউ ---
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_user(request):
+    if request.method == 'POST':
+        serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             token, created = Token.objects.get_or_create(user=user)
-            return Response({"key": token.key}, status=status.HTTP_201_CREATED)
+            return Response({'token': token.key, 'username': user.username}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class UserLessonProgressView(generics.CreateAPIView):
-    serializer_class = UserLessonProgressSerializer
-    permission_classes = [permissions.IsAuthenticated]
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_user(request):
+    username = request.data.get('username')
+    email = request.data.get('email')
+    password = request.data.get('password')
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        progress, created = UserLessonProgress.objects.get_or_create(
-            user=request.user,
-            lesson=serializer.validated_data['lesson']
-        )
-        if created:
-            headers = self.get_success_headers(serializer.data)
-            return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
-        else:
-            return Response(serializer.data, status=status.HTTP_200_OK)
+    if not password:
+        return Response({'error': 'পাসওয়ার্ড প্রয়োজন'}, status=status.HTTP_400_BAD_REQUEST)
 
-class UserQuizAttemptView(generics.CreateAPIView):
-    serializer_class = UserQuizAttemptSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    user = None
+    if email:
+        try:
+            user_by_email = User.objects.get(email=email)
+            user = authenticate(username=user_by_email.username, password=password)
+        except User.DoesNotExist:
+            pass
+    elif username:
+        user = authenticate(username=username, password=password)
 
-    def perform_create(self, serializer):
-        user = self.request.user
-        quiz = serializer.validated_data['quiz']
-        UserQuizAttempt.objects.filter(user=user, quiz=quiz).delete()
-        serializer.save(user=user)
+    if user:
+        token, _ = Token.objects.get_or_create(user=user)
+        return Response({'token': token.key, 'username': user.username}, status=status.HTTP_200_OK)
+    
+    return Response({'error': 'ভুল ইমেইল বা পাসওয়ার্ড'}, status=status.HTTP_400_BAD_REQUEST)
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout_user(request):
+    try:
+        request.user.auth_token.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class ProfileView(generics.GenericAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-    serializer_class = ProfileSerializer
+# --- প্রোফাইল ভিউ ---
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
         user = request.user
         total_points = UserQuizAttempt.objects.filter(user=user).aggregate(Sum('score'))['score__sum'] or 0
-        data = {
+        
+        serializer = ProfileSerializer({
             'username': user.username,
             'email': user.email,
             'total_points': total_points
-        }
-        serializer = self.get_serializer(data)
+        })
+        return Response(serializer.data)
+
+# --- মূল কন্টেন্ট ভিউসেট ---
+class CategoryViewSet(ReadOnlyModelViewSet):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+class CourseViewSet(ReadOnlyModelViewSet):
+    queryset = Course.objects.all()
+    serializer_class = CourseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+    def get_queryset(self):
+        queryset = Course.objects.all()
+        category_id = self.request.query_params.get('category')
+        search_term = self.request.query_params.get('search')
+        
+        if category_id:
+            queryset = queryset.filter(category_id=category_id)
+            
+        if search_term:
+            queryset = queryset.filter(
+                Q(title__icontains=search_term) | 
+                Q(description__icontains=search_term)
+            )
+            
+        return queryset
+
+class UnitViewSet(ReadOnlyModelViewSet):
+    queryset = Unit.objects.all()
+    serializer_class = UnitSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+class LessonViewSet(ReadOnlyModelViewSet):
+    queryset = Lesson.objects.all()
+    serializer_class = LessonSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+class QuizViewSet(ReadOnlyModelViewSet):
+    queryset = Quiz.objects.all()
+    serializer_class = QuizSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+class MatchingGameViewSet(ReadOnlyModelViewSet):
+    queryset = MatchingGame.objects.all()
+    serializer_class = MatchingGameSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+# --- ইউজার প্রোগ্রেস ভিউ ---
+class UserQuizAttemptView(generics.CreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserQuizAttemptSerializer
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        quiz = serializer.validated_data['quiz']
+        score = serializer.validated_data['score']
+        total_points = serializer.validated_data['total_points']
+
+        UserQuizAttempt.objects.filter(user=user, quiz=quiz).delete()
+        UserQuizAttempt.objects.create(user=user, quiz=quiz, score=score, total_points=total_points)
+
+# --- গ্রুপ ভিউসেট (বাগ ফিক্সড) ---
+class LearningGroupViewSet(viewsets.ModelViewSet):
+    queryset = LearningGroup.objects.all()
+    serializer_class = LearningGroupSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        return {'request': self.request}
+
+    def get_queryset(self):
+        # --- পরিবর্তন: 'memberships__user' এর বদলে 'learning_groups' ---
+        # (api/models.py অনুযায়ী User মডেলে related_name 'learning_groups' দেওয়া আছে)
+        return LearningGroup.objects.filter(memberships__user=self.request.user)
+        # --------------------------------------------------------
+
+    @action(detail=True, methods=['post'], url_path='join')
+    def join_group(self, request, pk=None):
+        try:
+            group = LearningGroup.objects.get(id=pk)
+        except LearningGroup.DoesNotExist:
+            return Response({'detail': 'গ্রুপটি খুঁজে পাওয়া যায়নি।'}, status=status.HTTP_404_NOT_FOUND)
+
+        if GroupMembership.objects.filter(group=group, user=request.user).exists():
+            return Response({'detail': 'আপনি ஏற்கனவே এই গ্রুপে আছেন।'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        GroupMembership.objects.create(group=group, user=request.user)
+        group_data = self.get_serializer(group).data
+        return Response({'message': 'সফলভাবে গ্রুপে যোগ দিয়েছেন!', 'group': group_data}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='leave')
+    def leave_group(self, request, pk=None):
+        try:
+            group = LearningGroup.objects.get(id=pk)
+        except LearningGroup.DoesNotExist:
+            return Response({'detail': 'গ্রুপটি খুঁজে পাওয়া যায়নি।'}, status=status.HTTP_404_NOT_FOUND)
+        
+        membership = GroupMembership.objects.filter(group=group, user=request.user).first()
+        if not membership:
+            return Response({'detail': 'আপনি এই গ্রুপের সদস্য নন।'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        if membership.is_group_admin:
+            if group.memberships.count() > 1:
+                return Response({'detail': 'অ্যাডমিন গ্রুপ ত্যাগ করতে পারবেন না। প্রথমে অন্যকে অ্যাডমিন বানান।'}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                group.delete()
+                return Response({'detail': 'গ্রুপটি ডিলিট করা হয়েছে।'}, status=status.HTTP_200_OK)
+        
+        membership.delete()
+        return Response({'detail': 'সফলভাবে গ্রুপ ত্যাগ করেছেন।'}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='members')
+    def get_members(self, request, pk=None):
+        group = self.get_object()
+        members = group.memberships.all()
+        serializer = GroupMembershipSerializer(members, many=True)
+        return Response(serializer.data)
+
+# --- গ্রুপ লিডারবোর্ড (বাগ ফিক্সড) ---
+class GroupLeaderboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id, *args, **kwargs):
+        try:
+            group = LearningGroup.objects.get(id=group_id)
+        except LearningGroup.DoesNotExist:
+            return Response({'detail': 'গ্রুপটি খুঁজে পাওয়া যায়নি।'}, status=status.HTTP_404_NOT_FOUND)
+        
+        group_courses = group.courses.all()
+        if not group_courses.exists():
+            return Response([], status=status.HTTP_200_OK) 
+
+        # --- পরিবর্তন: 'learning_groups' related_name ব্যবহার করা হয়েছে ---
+        members = User.objects.filter(learning_groups__group=group)
+        
+        lesson_quizzes_q = Q(quiz__lesson__unit__course__in=group_courses)
+        unit_quizzes_q = Q(quiz__unit__course__in=group_courses)
+
+        # --- পরিবর্তন: কোয়েরিটি সঠিকভাবে লেখা হয়েছে (আগের ২৪৬ লাইনের एरর ফিক্স) ---
+        leaderboard_data = UserQuizAttempt.objects.filter(
+            user__in=members
+        ).filter(
+            lesson_quizzes_q | unit_quizzes_q
+        ).values(
+            'user__username' # ইউজারনেম দিয়ে গ্রুপ করা
+        ).annotate(
+            total_score=Sum('score'), # মোট স্কোর যোগ করা
+            username=F('user__username') # সিরিয়ালাইজারের জন্য 'username' ফিল্ড তৈরি
+        ).filter(
+            total_score__gt=0 # যাদের স্কোর ০ এর বেশি
+        ).annotate(
+            rank=Window( # গ্রুপ করা ফলাফলের উপর র‍্যাঙ্ক করা
+                expression=Rank(),
+                order_by=F('total_score').desc()
+            )
+        ).order_by('rank') # র‍্যাঙ্ক অনুযায়ী সাজানো
+        # --------------------------------------------------------
+        
+        serializer = LeaderboardEntrySerializer(leaderboard_data, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+# --- ড্যাশবোর্ড ভিউ ---
+class DashboardView(APIView):
+    permission_classes = [IsAuthenticated]
 
-# --- নতুন: ফ্রি কোর্সে এনরোল করার ভিউ ---
-class EnrollCourseView(generics.CreateAPIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def create(self, request, *args, **kwargs):
-        course_id = kwargs.get('course_id')
+    def get(self, request, *args, **kwargs):
         user = request.user
         
-        try:
-            course = Course.objects.get(pk=course_id)
-        except Course.DoesNotExist:
-            raise NotFound(detail="এই কোর্সটি খুঁজে পাওয়া যায়নি।")
-
-        # ১. কোর্সটি প্রিমিয়াম কিনা চেক করুন
-        if course.is_premium:
-            raise PermissionDenied(detail="এটি একটি প্রিমিয়াম কোর্স। আপনি এভাবে এনরোল করতে পারবেন না।")
-
-        # ২. ইউজার কি ইতিমধ্যেই এনরোল করা আছে?
-        if UserEnrollment.objects.filter(user=user, course=course).exists():
-            return Response({"detail": "আপনি ইতিমধ্যেই এই কোর্সে এনরোল করেছেন।"}, status=status.HTTP_200_OK)
-
-        # ৩. এনরোলমেন্ট তৈরি করুন
-        UserEnrollment.objects.create(user=user, course=course)
+        notice = Notice.objects.filter(is_active=True).first()
+        promotion = Promotion.objects.filter(is_active=True).first()
         
-        return Response({"detail": f"আপনি সফলভাবে '{course.title}' কোর্সে এনরোল করেছেন।"}, status=status.HTTP_201_CREATED)
-# ----------------------------------------
+        enrolled_courses = Course.objects.filter(enrollments__user=user)
+        
+        context = {'request': request}
+        
+        dashboard_data = {
+            'notice': notice,
+            'promotion': promotion,
+            'my_courses': enrolled_courses
+        }
+
+        serializer = DashboardSerializer(dashboard_data, context=context)
+        return Response(serializer.data)

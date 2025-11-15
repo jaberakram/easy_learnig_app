@@ -7,6 +7,11 @@ import { Ionicons } from '@expo/vector-icons'; // আইকন ব্যবহ�
 import { useAuth } from '../context/AuthContext'; 
 import { useFocusEffect, useNavigation } from '@react-navigation/native'; 
 
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme'; 
+// ----------------------------------------
+
+
 // --- নেভিগেশন হেল্পার ফাংশন (ইউনিট ডিটেইলসে নেভিগেট করার জন্য) ---
 const getNavigationTarget = (course) => {
     const unitId = course.first_unit_id;
@@ -25,30 +30,8 @@ const getNavigationTarget = (course) => {
 };
 // ------------------------------------------
 
-// --- কালার প্যালেট (আপনার দেওয়া নতুন প্যালেট) ---
-const COLORS = {
-  // নতুন প্যালেট: ["#f4f1de","#e07a5f","#3d405b","#81b29a","#f2cc8f"]
-  background: '#F4F1DE', // Light Cream/Beige
-  primary: '#E07A5F', // Coral/Burnt Orange (Button/CTA)
-  accent: '#3D405B', // Dark Navy Blue (Text, Search Button)
-  progress: '#81B29A', // Muted Teal/Green (Progress Bar)
-  promoBg: '#F2CC8F', // Muted Gold/Mustard (Promotion Card Background)
-
-  // Standard/Utility Colors for Readability
-  text: '#3D405B', // Dark Navy (Primary Text Color)
-  textLight: '#6B7280', // Lighter Gray Text for small details
-  white: '#FFFFFF', 
-  border: '#D1C8B4', // Slightly darker shade of background for card borders
-  disabled: '#A5A6A2', // Muted gray
-  
-  // Notice Text/Background
-  noticeText: '#3D405B', // Dark Navy
-  noticeBg: '#FFFFFF', // White background for clean look
-  
-  // Promotion Text
-  promoText: '#3D405B', // Dark Navy
-  promoButtonText: '#FFFFFF', // White text on Coral button
-};
+// --- কালার প্যালেট (এই অংশটি মুছে ফেলা হয়েছে) ---
+// const COLORS = { ... };
 // -------------------------
 
 
@@ -260,7 +243,7 @@ export default function HomeScreen() {
   );
 }
 
-// --- স্টাইল (UI/UX রি-ডিজাইন - নতুন থিম) ---
+// --- স্টাইল (অপরিবর্তিত, কারণ এটি এখন ইম্পোর্টেড COLORS ব্যবহার করবে) ---
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,

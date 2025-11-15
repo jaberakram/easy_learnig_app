@@ -1,274 +1,243 @@
 // screens/CreateGroupScreen.js
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, FlatList, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../context/AuthContext'; 
+import { useAuth } from '../context/AuthContext';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function CreateGroupScreen({ navigation }) {
-    const { userToken, API_URL_BASE } = useAuth();
-    
-    // --- নতুন স্টেট ---
-    const [createdGroupId, setCreatedGroupId] = useState(null); // নতুন যোগ
-    // -------------------
-    const [groupTitle, setGroupTitle] = useState('');
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
+// ----------------------------------------
+
+export default function CreateGroupScreen() {
+    const [title, setTitle] = useState('');
     const [allCourses, setAllCourses] = useState([]);
-    const [selectedCourses, setSelectedCourses] = useState([]); // Array of course IDs
+    const [selectedCourseIds, setSelectedCourseIds] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [coursesLoading, setCoursesLoading] = useState(true);
+    const [pageLoading, setPageLoading] = useState(true); // কোর্স লোড করার জন্য
+    const { userToken, API_URL_BASE } = useAuth();
+    const navigation = useNavigation();
 
-    // --- সব কোর্স লোড করা (API থেকে) ---
-    useEffect(() => {
-        const fetchAllCourses = async () => {
-            try {
-                const response = await fetch(`${API_URL_BASE}/api/courses/`, {
-                    headers: {
-                        'Authorization': `Token ${userToken}`,
-                    },
-                });
-                if (!response.ok) {
-                    throw new Error('কোর্স লোড করা যায়নি।');
-                }
-                const courses = await response.json();
-                setAllCourses(courses);
-            } catch (e) {
-                console.error("Course fetch error:", e);
-                Alert.alert('ত্রুটি', 'কোর্স লোড করার সময় সমস্যা হয়েছে।');
-            } finally {
-                setCoursesLoading(false);
-            }
-        };
-        fetchAllCourses();
-    }, [userToken, API_URL_BASE]);
-    
-    // --- কোর্স নির্বাচনের হ্যান্ডলার ---
-    const toggleCourseSelection = (courseId) => {
-        if (selectedCourses.includes(courseId)) {
-            setSelectedCourses(selectedCourses.filter(id => id !== courseId));
-        } else {
-            setSelectedCourses([...selectedCourses, courseId]);
+    // --- কোর্স তালিকা লোড করা ---
+    const fetchAllCourses = useCallback(async () => {
+        setPageLoading(true);
+        try {
+            const response = await fetch(`${API_URL_BASE}/api/courses/`, {
+                headers: { 'Authorization': `Token ${userToken}` },
+            });
+            if (!response.ok) throw new Error('কোর্স তালিকা আনতে সমস্যা হয়েছে।');
+            const data = await response.json();
+            setAllCourses(data);
+        } catch (e) {
+            Alert.alert("ত্রুটি", e.message);
+        } finally {
+            setPageLoading(false);
         }
+    }, [userToken, API_URL_BASE]);
+
+    useFocusEffect(
+        useCallback(() => {
+            fetchAllCourses();
+        }, [fetchAllCourses])
+    );
+
+    // --- কোর্স সিলেক্ট/আনসিলেক্ট ---
+    const toggleCourseSelection = (courseId) => {
+        setSelectedCourseIds(prevIds => {
+            if (prevIds.includes(courseId)) {
+                return prevIds.filter(id => id !== courseId);
+            } else {
+                return [...prevIds, courseId];
+            }
+        });
     };
 
-    // --- গ্রুপ তৈরির হ্যান্ডলার (API Call) (পরিবর্তিত) ---
+    // --- গ্রুপ তৈরি করার ফাংশন ---
     const handleCreateGroup = async () => {
-        if (groupTitle.trim() === '') {
-            Alert.alert('ত্রুটি', 'অনুগ্রহ করে গ্রুপের নাম লিখুন।');
+        if (!title.trim()) {
+            Alert.alert("ত্রুটি", "অনুগ্রহ করে গ্রুপের একটি নাম দিন।");
             return;
         }
-        
-        setLoading(true);
-        setCreatedGroupId(null);
 
+        setLoading(true);
         try {
+            const body = JSON.stringify({
+                title: title.trim(),
+                courses: selectedCourseIds,
+            });
+
             const response = await fetch(`${API_URL_BASE}/api/groups/`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Authorization': `Token ${userToken}`,
+                    'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                    title: groupTitle.trim(),
-                    courses: selectedCourses,
-                }),
+                body: body,
             });
-            
-            if (response.ok) {
+
+            if (response.status === 201) {
                 const newGroup = await response.json();
-                
-                // --- গ্রুপ আইডি সেভ ও প্রদর্শন (মূল ফিক্স) ---
-                setCreatedGroupId(newGroup.id); 
-                Alert.alert(
-                    'গ্রুপ তৈরি সফল!', 
-                    `আপনার গ্রুপ "${newGroup.title}" তৈরি হয়েছে।\n\nঅন্যদের যোগ করার জন্য এই আইডিটি শেয়ার করুন: ${newGroup.id}`,
-                    [{ text: 'OK', onPress: () => navigation.navigate('GroupDetail', { groupId: newGroup.id, groupTitle: newGroup.title, isAdmin: true }) }]
-                );
+                Alert.alert("সফল!", "গ্রুপ সফলভাবে তৈরি হয়েছে।");
+                navigation.replace('GroupDetail', { groupId: newGroup.id, groupTitle: newGroup.title });
             } else {
                 const errorData = await response.json();
-                const errorMsg = errorData.title?.[0] || 'গ্রুপ তৈরি করা যায়নি।';
-                Alert.alert('ব্যর্থ', errorMsg);
+                throw new Error(errorData.detail || 'গ্রুপ তৈরি করা যায়নি।');
             }
-
         } catch (e) {
-            console.error("Create group error:", e);
-            Alert.alert('ত্রুটি', 'নেটওয়ার্ক সমস্যা বা সার্ভার ত্রুটি।');
+            console.error(e);
+            Alert.alert("ত্রুটি", e.message);
         } finally {
             setLoading(false);
         }
     };
-    
-    // --- রেন্ডার লজিক ---
-    if (coursesLoading) {
+
+    if (pageLoading) {
         return (
             <SafeAreaView style={styles.loaderContainer}>
-                <ActivityIndicator size="large" color="#007bff" />
-                <Text style={{ marginTop: 10 }}>কোর্স লোড হচ্ছে...</Text>
+                <ActivityIndicator size="large" color={COLORS.primary} />
             </SafeAreaView>
         );
     }
-    
+
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <ScrollView style={styles.container}>
-                <Text style={styles.header}>নতুন গ্রুপ তৈরি করুন</Text>
+        <SafeAreaView style={styles.container}>
+            <ScrollView contentContainerStyle={styles.content}>
+                <Text style={styles.title}>নতুন গ্রুপ তৈরি করুন</Text>
                 
-                {/* ১. গ্রুপের নাম ইনপুট */}
-                <Text style={styles.label}>গ্রুপের নাম*</Text>
+                <Text style={styles.label}>গ্রুপের নাম:</Text>
                 <TextInput
                     style={styles.input}
-                    placeholder="যেমন: Class 10 Batch 2025"
-                    value={groupTitle}
-                    onChangeText={setGroupTitle}
+                    placeholder="যেমন: Class 10 Batch"
+                    value={title}
+                    onChangeText={setTitle}
                 />
                 
-                {/* ২. কোর্স নির্বাচন */}
-                <Text style={styles.label}>কোর্স নির্বাচন করুন (ঐচ্ছিক)</Text>
-                <View style={styles.courseList}>
-                    {allCourses.map(course => (
-                        <TouchableOpacity
-                            key={course.id}
-                            style={[
-                                styles.coursePill,
-                                selectedCourses.includes(course.id) ? styles.courseSelected : styles.courseUnselected
-                            ]}
-                            onPress={() => toggleCourseSelection(course.id)}
-                            disabled={loading}
-                        >
-                            <Text style={[styles.courseText, selectedCourses.includes(course.id) ? {color: 'white'} : {color: '#333'}]}>
-                                {course.title}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                    {allCourses.length === 0 && (
-                        <Text style={{ color: 'gray', textAlign: 'center', marginTop: 10 }}>
-                            কোনো কোর্স পাওয়া যায়নি।
-                        </Text>
+                <Text style={styles.label}>কোর্সসমূহ (ঐচ্ছিক):</Text>
+                <Text style={styles.subtitle}>এই গ্রুপের জন্য কোন কোর্সগুলো লিংক করতে চান?</Text>
+
+                <View style={styles.courseListContainer}>
+                    {allCourses.length > 0 ? (
+                        allCourses.map((course) => {
+                            const isSelected = selectedCourseIds.includes(course.id);
+                            return (
+                                <TouchableOpacity
+                                    key={course.id}
+                                    style={[styles.courseItem, isSelected && styles.selectedCourseItem]}
+                                    onPress={() => toggleCourseSelection(course.id)}
+                                >
+                                    <Ionicons 
+                                        name={isSelected ? "checkbox" : "square-outline"} 
+                                        size={22} 
+                                        color={isSelected ? COLORS.primary : COLORS.textLight} 
+                                    />
+                                    <Text style={styles.courseItemText}>{course.title}</Text>
+                                </TouchableOpacity>
+                            );
+                        })
+                    ) : (
+                        <Text style={styles.emptyCourseText}>কোনো কোর্স পাওয়া যায়নি।</Text>
                     )}
                 </View>
-
-                {/* ৩. তৈরি বাটন */}
-                <TouchableOpacity
-                    style={[styles.button, loading ? styles.buttonDisabled : null]}
-                    onPress={handleCreateGroup}
+                
+                <TouchableOpacity 
+                    style={styles.button} 
+                    onPress={handleCreateGroup} 
                     disabled={loading}
                 >
                     {loading ? (
-                        <ActivityIndicator color="#ffffff" />
+                        <ActivityIndicator color={COLORS.white} />
                     ) : (
-                        <Text style={styles.buttonText}>গ্রুপ তৈরি করুন</Text>
+                        <Text style={styles.buttonText}>Create Group</Text>
                     )}
                 </TouchableOpacity>
-                
-                {/* --- নতুন: তৈরি করা আইডি প্রদর্শন (ভিজুয়াল কনফার্মেশন) --- */}
-                {createdGroupId && (
-                     <View style={styles.successBox}>
-                        <Text style={styles.successText}>গ্রুপ আইডি: {createdGroupId}</Text>
-                        <Text style={styles.shareText}>এই আইডিটি দিয়ে অন্যেরা গ্রুপে যুক্ত হতে পারবে।</Text>
-                     </View>
-                )}
-                {/* ------------------------------------------ */}
-
             </ScrollView>
         </SafeAreaView>
     );
 }
 
-// --- স্টাইল ---
+// --- স্টাইল (থিম কালার ব্যবহার করে আপডেট) ---
 const styles = StyleSheet.create({
-    safeArea: {
+    container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: COLORS.background, // পরিবর্তন
     },
     loaderContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        backgroundColor: COLORS.background, // পরিবর্তন
     },
-    container: {
-        flex: 1,
+    content: {
         padding: 20,
     },
-    header: {
-        fontSize: 24,
+    title: {
+        fontSize: 26,
         fontWeight: 'bold',
-        marginBottom: 25,
-        color: '#333',
+        color: COLORS.accent, // পরিবর্তন
+        marginBottom: 20,
     },
     label: {
         fontSize: 16,
         fontWeight: '600',
-        color: '#555',
-        marginTop: 15,
+        color: COLORS.text, // পরিবর্তন
         marginBottom: 8,
+        marginTop: 10,
+    },
+    subtitle: {
+        fontSize: 14,
+        color: COLORS.textLight, // পরিবর্তন
+        marginBottom: 15,
     },
     input: {
-        backgroundColor: 'white',
-        paddingVertical: 12,
-        paddingHorizontal: 15,
+        backgroundColor: COLORS.white, // পরিবর্তন
+        padding: 15,
         borderRadius: 8,
         fontSize: 16,
         borderWidth: 1,
-        borderColor: '#ddd',
-        marginBottom: 10,
+        borderColor: COLORS.border, // পরিবর্তন
     },
-    courseList: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-    },
-    coursePill: {
-        paddingHorizontal: 15,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginRight: 10,
-        marginBottom: 10,
+    courseListContainer: {
+        maxHeight: 300, // উচ্চতা সীমাবদ্ধ করা
         borderWidth: 1,
+        borderColor: COLORS.border, // পরিবর্তন
+        borderRadius: 8,
+        marginTop: 5,
+        backgroundColor: COLORS.white, // পরিবর্তন
     },
-    courseUnselected: {
-        backgroundColor: '#e9ecef',
-        borderColor: '#ced4da',
+    courseItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: COLORS.border, // পরিবর্তন
     },
-    courseSelected: {
-        backgroundColor: '#007bff',
-        borderColor: '#007bff',
+    selectedCourseItem: {
+        backgroundColor: COLORS.primary + '15', // পরিবর্তন (হালকা প্রাইমারি)
     },
-    courseText: {
-        fontSize: 14,
-        fontWeight: '500',
+    courseItemText: {
+        flex: 1,
+        fontSize: 15,
+        color: COLORS.text, // পরিবর্তন
+        marginLeft: 12,
+    },
+    emptyCourseText: {
+        padding: 15,
+        color: COLORS.textLight, // পরিবর্তন
+        textAlign: 'center',
     },
     button: {
-        backgroundColor: '#28a745',
-        padding: 15,
+        backgroundColor: COLORS.primary, // পরিবর্তন
+        padding: 18,
         borderRadius: 8,
         alignItems: 'center',
         marginTop: 30,
-        minHeight: 50,
+        minHeight: 58,
         justifyContent: 'center',
     },
-    buttonDisabled: {
-        backgroundColor: '#aaa',
-    },
     buttonText: {
-        color: 'white',
+        color: COLORS.white, // পরিবর্তন
         fontSize: 16,
         fontWeight: 'bold',
-    },
-    successBox: {
-        backgroundColor: '#d4edda',
-        borderColor: '#c3e6cb',
-        borderWidth: 1,
-        padding: 15,
-        borderRadius: 8,
-        marginTop: 20,
-        alignItems: 'center',
-    },
-    successText: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#155724',
-    },
-    shareText: {
-        fontSize: 14,
-        color: '#155724',
-        marginTop: 5,
-        textAlign: 'center',
     },
 });

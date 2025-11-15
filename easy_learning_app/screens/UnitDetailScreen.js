@@ -1,66 +1,125 @@
 // screens/UnitDetailScreen.js
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, RefreshControl, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 
-// --- কালার প্যালেট ---
-const COLORS = {
-  background: '#F4F1DE', // Light Cream/Beige
-  primary: '#E07A5F', // Coral/Burnt Orange (Button/CTA)
-  accent: '#3D405B', // Dark Navy Blue (Text, Headings)
-  progress: '#81B29A', // Muted Teal/Green (Completed)
-  promoBg: '#F2CC8F', // Muted Gold/Mustard
-  
-  text: '#3D405B', 
-  textLight: '#6B7280', 
-  white: '#FFFFFF', 
-  border: '#D1C8B4', 
-  disabled: '#A5A6A2', 
+// --- সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from '../constants/theme';
+// ------------------------------------------
+
+// --- অ্যানিমেশন সক্ষম করা (Android-এর জন্য) ---
+if (Platform.OS === 'android') {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+}
+// ------------------------------------------
+
+
+// --- এক্সপ্যান্ডেবল লেসন আইটেম কম্পোনেন্ট (অপরিবর্তিত) ---
+const ExpandableLessonItem = ({ item, navigation }) => {
+    const [expanded, setExpanded] = useState(false);
+    
+    const iconColor = COLORS.accent; 
+    const lessonIcon = "document-text-outline"; 
+    
+    const handleLessonPress = () => {
+        navigation.navigate('LessonDetail', { 
+            lessonId: item.id, 
+            lessonTitle: item.title 
+        });
+    };
+
+    const toggleExpand = () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setExpanded(!expanded);
+    };
+
+    let lessonType = item.has_video ? 'Video' : 'Article';
+    if (!item.has_video && !item.has_article) lessonType = 'Lesson Content'; 
+    if (item.has_quiz) lessonType += ' + Quiz';
+    if (item.has_game) lessonType += ' + Game';
+    
+    return (
+        <View style={styles.unitCard}>
+            <View style={styles.unitHeader}>
+                <TouchableOpacity onPress={handleLessonPress} style={styles.unitHeaderContentWrapper}>
+                    <View style={styles.headerIconWrapper}>
+                        <Ionicons 
+                            name={lessonIcon} 
+                            size={24} 
+                            color={iconColor} 
+                        />
+                    </View>
+                    
+                    <View style={styles.unitHeaderContent}>
+                        <Text style={styles.lessonTitle}>Lesson {item.order}: {item.title}</Text>
+                        <Text style={styles.unitStats}>{lessonType}</Text>
+                    </View>
+                </TouchableOpacity>
+                
+                <TouchableOpacity onPress={toggleExpand} style={styles.expandButton}>
+                    <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={24} color={COLORS.textLight} />
+                </TouchableOpacity>
+            </View>
+
+            {expanded && (
+                <View style={styles.unitContent}>
+                    {item.has_video && (
+                        <Text style={styles.contentItem}>
+                            <Ionicons name="play-circle-outline" size={14} color={COLORS.textLight} /> Video Content
+                        </Text>
+                    )}
+                    {item.has_article && (
+                        <Text style={styles.contentItem}>
+                            <Ionicons name="reader-outline" size={14} color={COLORS.textLight} /> Article Content
+                        </Text>
+                    )}
+                    {item.has_quiz && (
+                        <Text style={styles.contentItem}>
+                            <Ionicons name="help-circle-outline" size={14} color={COLORS.textLight} /> Lesson Quiz
+                        </Text>
+                    )}
+                    {item.has_game && (
+                        <Text style={styles.contentItem}>
+                            <Ionicons name="game-controller-outline" size={14} color={COLORS.textLight} /> Matching Game
+                        </Text>
+                    )}
+                </View>
+            )}
+        </View>
+    );
 };
 // ------------------------------------------
 
-// --- লেসন/কুইজ আইটেম কম্পোনেন্ট ---
-const UnitItem = ({ item, navigation, type = 'lesson' }) => {
+// --- কুইজ/গেম আইটেম কম্পোনেন্ট (অপরিবর্তিত) ---
+const ChallengeItem = ({ item, navigation, type = 'quiz' }) => {
     
-    let iconName, typeName, isCompleted, cardStyle, iconColor;
+    let iconName, typeName, iconColor;
+    const scorePercentage = item.latest_score_percentage;
 
-    if (type === 'lesson') {
-        // FIX: আর্টিকেল আইকন পরিবর্তন
-        iconName = item.has_video ? 'videocam-outline' : 'reader-outline'; 
-        typeName = item.has_video ? 'Lesson (Video)' : 'Lesson (Article)';
-        isCompleted = item.is_attempted; // FIX: পয়েন্ট-ভিত্তিক লজিক
-        iconColor = isCompleted ? COLORS.progress : COLORS.accent;
-    } else if (type === 'quiz') {
+    if (type === 'quiz') {
         iconName = 'help-circle-outline';
         typeName = 'Mastery Quiz';
-        isCompleted = item.is_attempted;
-        iconColor = isCompleted ? COLORS.progress : COLORS.primary;
-    } else { // Game
+        iconColor = COLORS.primary;
+    } else { 
         iconName = 'game-controller-outline';
         typeName = 'Unit Game';
-        isCompleted = item.is_attempted;
-        iconColor = isCompleted ? COLORS.progress : COLORS.progress;
+        iconColor = COLORS.progress;
+    }
+    
+    let scoreColor = COLORS.disabled;
+    if (scorePercentage !== null && scorePercentage !== undefined) {
+        if (scorePercentage >= 80) scoreColor = COLORS.progress; 
+        else if (scorePercentage >= 50) scoreColor = COLORS.promoBg; 
+        else scoreColor = COLORS.primary; 
     }
 
-    // সম্পন্ন হলে কার্ডের স্টাইল পরিবর্তন
-    cardStyle = isCompleted ? [styles.itemCard, styles.completedCard] : styles.itemCard;
-    
-    // স্ট্যাটাস আইকন
-    const statusIcon = isCompleted 
-        ? <Ionicons name="checkmark-circle" size={24} color={COLORS.progress} />
-        : <Ionicons name="chevron-forward" size={24} color={COLORS.textLight} />;
-
-    // আইটেম ট্যাপ হ্যান্ডলার
     const handlePress = () => {
-        if (type === 'lesson') {
-            navigation.navigate('LessonDetail', { 
-                lessonId: item.id, 
-                lessonTitle: item.title 
-            });
-        } else if (type === 'quiz') {
+        if (type === 'quiz') {
             navigation.navigate('QuizScreen', { 
                 quizId: item.id, 
                 quizTitle: item.title 
@@ -74,17 +133,27 @@ const UnitItem = ({ item, navigation, type = 'lesson' }) => {
     };
 
     return (
-        <TouchableOpacity style={cardStyle} onPress={handlePress}>
-            <View style={[styles.itemIconContainer, { backgroundColor: iconColor + '20' }]}>
-                <Ionicons name={iconName} size={22} color={iconColor} />
+        <TouchableOpacity style={styles.unitCard} onPress={handlePress}>
+            <View style={styles.unitHeader}>
+                <View style={styles.unitHeaderContentWrapper}> 
+                    <View style={styles.headerIconWrapper}>
+                        <Ionicons name={iconName} size={24} color={iconColor} />
+                    </View>
+                    <View style={styles.unitHeaderContent}>
+                        <Text style={styles.lessonTitle}>
+                            {type === 'quiz' ? 'Quiz' : 'Game'} {item.order}: {item.title}
+                        </Text>
+                        <Text style={styles.unitStats}>{typeName}</Text>
+                    </View>
+                </View>
+                
+                {type === 'quiz' && scorePercentage !== null && scorePercentage !== undefined && (
+                    <View style={[styles.scoreBadge, { backgroundColor: scoreColor }]}>
+                        <Text style={styles.scoreText}>{scorePercentage}%</Text>
+                    </View>
+                )}
+                <Ionicons name="chevron-forward" size={24} color={COLORS.textLight} style={{ marginLeft: 8 }} />
             </View>
-            
-            <View style={styles.itemTextContent}>
-                <Text style={styles.itemTitle}>{item.title}</Text>
-                <Text style={styles.itemType}>{typeName} | Order: {item.order}</Text>
-            </View>
-            
-            {statusIcon}
         </TouchableOpacity>
     );
 };
@@ -100,12 +169,10 @@ export default function UnitDetailScreen({ route }) {
     const [unitData, setUnitData] = useState(null);
     const [error, setError] = useState(null);
 
-    // --- ইউনিট ডিটেইলস (হালকা ডেটা) লোড করা ---
     const fetchUnitDetails = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
-
             const response = await fetch(`${API_URL_BASE}/api/units/${unitId}/`, {
                 headers: {
                     'Authorization': `Token ${userToken}`,
@@ -137,8 +204,6 @@ export default function UnitDetailScreen({ route }) {
         }, [fetchUnitDetails])
     );
     
-    // --- ফিক্সড ফুটার অ্যাকশন (সরানো হয়েছে) ---
-
     if (loading && !unitData) {
         return (
             <SafeAreaView style={styles.loaderContainer}>
@@ -158,56 +223,91 @@ export default function UnitDetailScreen({ route }) {
         );
     }
     
-    // নতুন আর্কিটেকচার অনুযায়ী লেসন, কুইজ ও গেম আলাদা করা
     const lessons = unitData.lessons || [];
-    const masteryQuizzes = unitData.quizzes || []; // ব্যাকএন্ড এগুলোকে ফিল্টার করেছে
-    const unitGames = unitData.matching_games || []; // ব্যাকএন্ড এগুলোকে ফিল্টার করেছে
+    const masteryQuizzes = unitData.quizzes || [];
+    const unitGames = unitData.matching_games || [];
 
-    // অগ্রগতি গণনা (শুধুমাত্র অ্যাটেম্পটের উপর ভিত্তি করে)
-    const totalItems = lessons.length + masteryQuizzes.length + unitGames.length;
-    const completedItems = 
-        lessons.filter(item => item.is_attempted).length + // FIX: is_completed এর বদলে is_attempted
-        masteryQuizzes.filter(item => item.is_attempted).length +
-        unitGames.filter(item => item.is_attempted).length;
-        
-    const progressPercentage = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+    const totalLessons = lessons.length;
+    const totalLessonQuizzes = lessons.filter(l => l.has_quiz).length;
+    const totalLessonGames = lessons.filter(l => l.has_game).length;
+    const totalMasteryQuizzes = masteryQuizzes.length;
+    const totalUnitGames = unitGames.length;
+    const totalQuizzes = totalLessonQuizzes + totalMasteryQuizzes;
+    const totalGames = totalLessonGames + totalUnitGames;
+    
+    const totalPoints = unitData.total_possible_points || 0;
+    const earnedPoints = unitData.user_earned_points || 0;
+    const progressPercentage = totalPoints > 0 ? (earnedPoints / totalPoints) * 100 : 0;
+    
+    const statusText = (earnedPoints > 0 || totalPoints > 0)
+        ? `${progressPercentage.toFixed(0)}% Complete`
+        : 'Not Started';
 
 
     return (
         <SafeAreaView style={styles.safeArea}>
-            {/* FIX: paddingBottom: 100 সরানো হয়েছে */}
             <ScrollView contentContainerStyle={styles.container} refreshControl={
                 <RefreshControl refreshing={loading} onRefresh={fetchUnitDetails} colors={[COLORS.primary]} />
             }>
                 
-                {/* --- ১. Hero Section (Progress & Stats) --- */}
-                <View style={styles.headerSection}>
+                {/* --- ১. Hero Section (টাইটেল ফন্ট আপডেটেড) --- */}
+                <View style={styles.heroSection}>
                     <Text style={styles.unitTitle}>{unitData.title}</Text>
-                    
+                    <Text style={styles.courseTitleText}>
+                        <Ionicons name="school-outline" size={17} color={COLORS.textLight} />
+                        {unitData.course_title || 'Course'}
+                    </Text>
+                </View>
+
+                {/* --- ২. Progress Section --- */}
+                <View style={styles.progressSection}>
                     <View style={styles.progressBarOuter}>
                         <View style={[styles.progressBarInner, { width: `${progressPercentage}%` }]} />
                     </View>
-                    
                     <View style={styles.statsRow}>
                         <Text style={styles.progressText}>
-                            {progressPercentage.toFixed(0)}% Complete (Based on attempts)
+                            {statusText}
                         </Text>
                         <Text style={styles.totalItemsText}>
-                            {completedItems} / {totalItems} Items
+                           Points: {earnedPoints} / {totalPoints}
                         </Text>
                     </View>
                 </View>
 
-                {/* --- ২. লেসন তালিকা --- */}
-                <Text style={styles.listHeader}>Lessons</Text>
-                <View style={styles.itemsList}>
+                {/* --- ৩. ইউনিট স্ট্যাটিস্টিকস গ্রিড --- */}
+                <View style={styles.statsGrid}>
+                    <View style={styles.statItem}>
+                        <Ionicons name="document-text-outline" size={24} color={COLORS.accent} />
+                        <Text style={styles.statValue}>{totalLessons}</Text>
+                        <Text style={styles.statLabel}>Lessons</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Ionicons name="help-circle-outline" size={24} color={COLORS.accent} />
+                        <Text style={styles.statValue}>{totalQuizzes}</Text>
+                        <Text style={styles.statLabel}>Total Quizzes</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Ionicons name="game-controller-outline" size={24} color={COLORS.accent} />
+                        <Text style={styles.statValue}>{totalGames}</Text>
+                        <Text style={styles.statLabel}>Total Games</Text>
+                    </View>
+                    <View style={styles.statItem}>
+                        <Ionicons name="trophy-outline" size={24} color={COLORS.accent} />
+                        <Text style={styles.statValue}>{totalPoints}</Text>
+                        <Text style={styles.statLabel}>Total Points</Text>
+                    </View>
+                </View>
+
+
+                {/* --- ৪. লেসন তালিকা --- */}
+                <Text style={styles.unitsHeader}>Lessons</Text>
+                <View>
                     {lessons.length > 0 ? (
                         lessons.map((item) => (
-                            <UnitItem 
+                            <ExpandableLessonItem 
                                 key={`L-${item.id}`}
                                 item={item} 
                                 navigation={navigation} 
-                                type='lesson'
                             />
                         ))
                     ) : (
@@ -215,13 +315,13 @@ export default function UnitDetailScreen({ route }) {
                     )}
                 </View>
                 
-                {/* --- ৩. মাস্টারি কুইজ ও গেম তালিকা --- */}
+                {/* --- ৫. মাস্টারি কুইজ ও গেম তালিকা --- */}
                 {(masteryQuizzes.length > 0 || unitGames.length > 0) && (
                     <>
-                        <Text style={styles.listHeader}>Mastery Challenges</Text>
-                        <View style={styles.itemsList}>
+                        <Text style={styles.unitsHeader}>Mastery Challenges</Text>
+                        <View>
                             {masteryQuizzes.map((item) => (
-                                <UnitItem 
+                                <ChallengeItem 
                                     key={`Q-${item.id}`}
                                     item={item} 
                                     navigation={navigation} 
@@ -229,7 +329,7 @@ export default function UnitDetailScreen({ route }) {
                                 />
                             ))}
                             {unitGames.map((item) => (
-                                <UnitItem 
+                                <ChallengeItem 
                                     key={`G-${item.id}`}
                                     item={item} 
                                     navigation={navigation} 
@@ -241,14 +341,11 @@ export default function UnitDetailScreen({ route }) {
                 )}
 
             </ScrollView>
-            
-            {/* --- ৪. ফিক্সড ফুটার CTA (সরানো হয়েছে) --- */}
-
         </SafeAreaView>
     );
 }
 
-// --- স্টাইল (নতুন প্যালেট এবং UI) ---
+// --- স্টাইল (আপডেটেড Hero Section ফন্ট সাইজ) ---
 const styles = StyleSheet.create({
     safeArea: {
         flex: 1,
@@ -263,7 +360,7 @@ const styles = StyleSheet.create({
     container: {
         paddingHorizontal: 15,
         paddingTop: 0,
-        paddingBottom: 20, // FIX: ফুটারের প্যাডিং সরানো হয়েছে
+        paddingBottom: 20,
     },
     errorText: {
         color: COLORS.primary,
@@ -277,18 +374,27 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         paddingVertical: 10,
     },
-    // --- Header Section ---
-    headerSection: {
+    // --- Hero Section (টাইটেল ফন্ট আপডেটেড) ---
+    heroSection: {
         paddingVertical: 20,
+        paddingBottom: 10,
+    },
+    unitTitle: {
+        fontSize: 28, // <-- পরিবর্তন: 26 থেকে 28
+        fontWeight: 'bold',
+        color: COLORS.accent,
+        marginBottom: 5,
+    },
+    courseTitleText: {
+        fontSize: 17, // <-- পরিবর্তন: 16 থেকে 17
+        color: COLORS.textLight,
+    },
+    // --- Progress Section ---
+    progressSection: {
+        paddingVertical: 10,
         marginBottom: 10,
         borderBottomWidth: 1,
         borderBottomColor: COLORS.border,
-    },
-    unitTitle: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: COLORS.accent,
-        marginBottom: 15,
     },
     progressBarOuter: {
         height: 8,
@@ -298,7 +404,7 @@ const styles = StyleSheet.create({
     },
     progressBarInner: {
         height: '100%',
-        backgroundColor: COLORS.progress, // Muted Teal/Green
+        backgroundColor: COLORS.progress, 
         borderRadius: 4,
     },
     statsRow: {
@@ -314,56 +420,114 @@ const styles = StyleSheet.create({
     totalItemsText: {
         fontSize: 14,
         color: COLORS.textLight,
+        fontWeight: '500', 
     },
-    // --- Items List ---
-    listHeader: {
+    // --- Stats Grid ---
+    statsGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 30,
+        paddingTop: 10,
+    },
+    statItem: {
+        flex: 1,
+        alignItems: 'center',
+        padding: 8,
+        borderRightWidth: 1,
+        borderRightColor: COLORS.border,
+    },
+    statValue: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        color: COLORS.accent,
+        marginTop: 5,
+    },
+    statLabel: {
+        fontSize: 12,
+        color: COLORS.textLight,
+        marginTop: 2,
+    },
+    // --- Unit/Lesson List ---
+    unitsHeader: {
         fontSize: 20,
         fontWeight: 'bold',
         color: COLORS.accent,
         marginBottom: 15,
         marginTop: 10,
     },
-    itemsList: {
-        // স্টাইল এখানে
-    },
-    itemCard: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    unitCard: {
         backgroundColor: COLORS.white,
-        padding: 15,
-        marginBottom: 10,
         borderRadius: 10,
-        borderLeftWidth: 4,
-        borderLeftColor: COLORS.primary, // অসম্পূর্ণ আইটেমের হাইলাইট
+        marginBottom: 15,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: COLORS.border,
         elevation: 2,
     },
-    completedCard: {
-        backgroundColor: '#F7FFF7', // খুব হালকা সবুজ ব্যাকগ্রাউন্ড
-        borderLeftColor: COLORS.progress, // Progress color for completed item
+    unitHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 15,
+        backgroundColor: COLORS.white,
     },
-    itemIconContainer: {
-        padding: 10,
-        borderRadius: 8,
+    unitHeaderContentWrapper: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    headerIconWrapper: {
+        padding: 5,
+        borderRadius: 5,
+        backgroundColor: COLORS.background, 
         marginRight: 15,
     },
-    itemTextContent: {
+    unitHeaderContent: {
         flex: 1,
     },
-    itemTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: COLORS.text,
+    lessonTitle: { // লেসনের টাইটেল (লিস্টের ভেতরের)
+        fontSize: 16, // <-- এটা অপরিবর্তিত (16)
+        fontWeight: 'bold',
+        color: COLORS.accent,
     },
-    itemType: {
+    unitStats: {
         fontSize: 12,
         color: COLORS.textLight,
         marginTop: 2,
     },
-    // --- Footer CTA (সরানো হয়েছে) ---
+    expandButton: {
+        padding: 5,
+    },
+    unitContent: {
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        backgroundColor: COLORS.white,
+        borderTopWidth: 1,
+        borderTopColor: COLORS.border,
+    },
+    contentItem: {
+        fontSize: 14,
+        color: COLORS.textLight,
+        marginBottom: 5,
+        marginLeft: 5,
+    },
     reloadButton: {
         backgroundColor: COLORS.primary,
         padding: 10,
         borderRadius: 5,
         marginTop: 10,
+    },
+    // --- স্কোর ব্যাজ স্টাইল ---
+    scoreBadge: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 5,
+        minWidth: 40,
+        alignItems: 'center',
+        marginLeft: 8, 
+    },
+    scoreText: {
+        color: COLORS.white,
+        fontSize: 12,
+        fontWeight: 'bold',
     },
 });

@@ -10,6 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 // AuthContext ইম্পোর্ট
 import { AuthProvider, useAuth } from './context/AuthContext';
 
+// --- নতুন: সেন্ট্রাল থিম থেকে কালার ইম্পোর্ট ---
+import { COLORS } from './constants/theme';
+// ----------------------------------------
+
 // --- স্ক্রিন ইম্পোর্ট ---
 import HomeScreen from './screens/HomeScreen';
 import ExploreScreen from './screens/ExploreScreen';
@@ -29,23 +33,17 @@ import GroupListScreen from './screens/GroupListScreen';
 import GroupDetailScreen from './screens/GroupDetailScreen';
 import CreateGroupScreen from './screens/CreateGroupScreen';
 import GroupJoinScreen from './screens/GroupJoinScreen';
-// --- নতুন স্ক্রিন ইম্পোর্ট ---
 import LessonDetailScreen from './screens/LessonDetailScreen'; 
 // ----------------------------
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// --- কালার প্যালেট (আপনার পছন্দের) ---
-const COLORS = {
-  primary: '#E07A5F', 
-  accent: '#3D405B', 
-  background: '#F4F1DE',
-  textLight: '#6B7280', 
-};
+// --- কালার প্যালেট (এই অংশটি মুছে ফেলা হয়েছে) ---
+// const COLORS = { ... };
 // ---------------------------------
 
-// --- MainAppStack (LessonDetailScreen সহ আপডেট) ---
+// --- MainAppStack (থিম কালার ব্যবহার করে আপডেট) ---
 function MainAppStack() {
   return (
     <Stack.Navigator 
@@ -68,13 +66,11 @@ function MainAppStack() {
       <Stack.Screen name="CourseDetail" component={CourseDetailScreen} options={({ route }) => ({ title: route.params.courseTitle })} />
       <Stack.Screen name="UnitDetail" component={UnitDetailScreen} options={({ route }) => ({ title: route.params.unitTitle })} />
       
-      {/* --- নতুন LessonDetailScreen যুক্ত করা হয়েছে --- */}
       <Stack.Screen 
         name="LessonDetail" 
         component={LessonDetailScreen} 
         options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} 
       />
-      {/* ------------------------------------------------ */}
 
       <Stack.Screen name="LessonVideo" component={LessonVideoScreen} options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} />
       <Stack.Screen name="LessonArticle" component={LessonArticleScreen} options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} />
@@ -101,7 +97,7 @@ function MainAppStack() {
   );
 }
 
-// --- GroupStack (অপরিবর্তিত) ---
+// --- GroupStack (থিম কালার ব্যবহার করে আপডেট) ---
 function GroupStack() {
     return (
         <Stack.Navigator 
@@ -120,7 +116,7 @@ function GroupStack() {
 }
 // ----------------------------
 
-// --- HomeTabs (নতুন থিম কালার) ---
+// --- HomeTabs (থিম কালার ব্যবহার করে আপডেট) ---
 function HomeTabs() {
   return (
     <Tab.Navigator 
