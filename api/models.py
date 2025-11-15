@@ -3,9 +3,7 @@
 from django.db import models
 from django_ckeditor_5.fields import CKEditor5Field
 from django.conf import settings 
-# --- নতুন ইমপোর্ট ---
-from django.contrib.auth.models import User
-# --------------------
+from django.contrib.auth.models import User 
 
 # ১. বিষয় (Category) মডেল (অপরিবর্তিত)
 class Category(models.Model):
@@ -37,7 +35,6 @@ class Unit(models.Model):
         ordering = ['order'] 
 
     def __str__(self):
-        # --- পরিবর্তন: অ্যাডমিন প্যানেলে ভালো করে দেখানোর জন্য ---
         return f"{self.course.title} - Unit {self.order}: {self.title}"
 
 # ৪. লেসন (Lesson) মডেল (অপরিবর্তিত)
@@ -52,7 +49,6 @@ class Lesson(models.Model):
         ordering = ['order'] 
 
     def __str__(self):
-        # --- পরিবর্তন: অ্যাডমিন প্যানেলে ভালো করে দেখানোর জন্য ---
         return f"{self.unit.course.title} - {self.unit.title} - Lesson {self.order}: {self.title}"
     
 # ৫. কুইজ (Quiz) মডেল (অপরিবর্তিত)
@@ -153,17 +149,15 @@ class GamePair(models.Model):
         return f"{self.item_one} <-> {self.item_two}"
 
 
-# --- নতুন: ১৩. লার্নিং গ্রুপ (LearningGroup) মডেল ---
+# ১৩. লার্নিং গ্রুপ (LearningGroup) মডেল (অপরিবর্তিত)
 class LearningGroup(models.Model):
     title = models.CharField(max_length=200, help_text="গ্রুপের নাম")
-    # গ্রুপ অ্যাডমিন (Group Admin) হিসেবে যিনি গ্রুপটি তৈরি করেছেন
     admin = models.ForeignKey(
         settings.AUTH_USER_MODEL, 
         related_name='owned_groups', 
         on_delete=models.CASCADE,
         help_text="গ্রুপের অ্যাডমিন"
     )
-    # এই গ্রুপে কোন কোন কোর্স অন্তর্ভুক্ত থাকবে
     courses = models.ManyToManyField(
         'Course', 
         related_name='groups',
@@ -178,17 +172,47 @@ class LearningGroup(models.Model):
     class Meta:
         ordering = ['-created_at']
 
-# --- নতুন: ১৪. গ্রুপ মেম্বারশিপ (GroupMembership) মডেল ---
+# ১৪. গ্রুপ মেম্বারশিপ (GroupMembership) মডেল (অপরিবর্তিত)
 class GroupMembership(models.Model):
     group = models.ForeignKey(LearningGroup, related_name='memberships', on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='group_memberships', on_delete=models.CASCADE)
-    # গ্রুপের অন্যান্য মেম্বারদের কাছ থেকে আলাদাভাবে চিহ্নিত করতে
     is_group_admin = models.BooleanField(default=False, help_text="ইউজার কি এই গ্রুপের অ্যাডমিন?")
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('group', 'user') # একটি ইউজার একই গ্রুপে দুইবার যোগ হতে পারবে না
+        unique_together = ('group', 'user') 
         ordering = ['joined_at']
 
     def __str__(self):
         return f"{self.user.username} is member of {self.group.title}"
+
+
+# --- নতুন: ১৫. নোটিশ (Notice) মডেল ---
+class Notice(models.Model):
+    title = models.CharField(max_length=255, help_text="নোটিশের শিরোনাম")
+    body = models.TextField(help_text="নোটিশের মূল বার্তা")
+    is_active = models.BooleanField(default=True, help_text="যদি সক্রিয় থাকে, তবে এটি হোমপেজে দেখাবে")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title[:50]
+
+    class Meta:
+        verbose_name_plural = "Notices"
+        ordering = ['-created_at']
+
+# --- নতুন: ১৬. প্রমোশন (Promotion) মডেল ---
+class Promotion(models.Model):
+    title = models.CharField(max_length=200, help_text="প্রমোশনের শিরোনাম (যেমন: 20% Discount)")
+    subtitle = models.CharField(max_length=255, blank=True, null=True, help_text="ছোট বর্ণনা বা ডেসক্রিপশন")
+    # প্রমোশনটিকে একটি নির্দিষ্ট কোর্সের সাথে লিঙ্ক করা (ঐচ্ছিক)
+    course = models.ForeignKey(Course, on_delete=models.SET_NULL, null=True, blank=True, related_name='promotions')
+    is_active = models.BooleanField(default=True, help_text="যদি সক্রিয় থাকে, তবে এটি হোমপেজে দেখাবে")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.title
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name_plural = "Promotions"

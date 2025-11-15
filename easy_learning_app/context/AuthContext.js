@@ -3,7 +3,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
 
-const API_URL_BASE = 'http://192.168.0.200:8000'; 
+const API_URL_BASE = 'http://192.168.0.198:8000'; 
 
 const AuthContext = createContext();
 

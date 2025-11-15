@@ -1,18 +1,17 @@
 # api/admin.py
 from django.contrib import admin
-import nested_admin # <-- 'nested_admin' ইম্পোর্ট
+import nested_admin 
 from .models import (
     Category, Course, Unit, Lesson, 
     Quiz, Question, Choice,
     UserLessonProgress, UserQuizAttempt,
-    UserEnrollment,
-    MatchingGame, GamePair,
-    # --- নতুন মডেল ইম্পোর্ট ---
-    LearningGroup, GroupMembership 
-    # -----------------------
+    UserEnrollment, MatchingGame, GamePair,
+    LearningGroup, GroupMembership,
+    # --- নতুন মডেল ইমপোর্ট ---
+    Notice, Promotion
 )
 
-# --- ধাপ ১: নেস্টেড ইনলাইন তৈরি (ভেতর থেকে বাইরে) ---
+# ... (ChoiceInline, QuestionInline, QuizInline, GamePairInline, MatchingGameInline অপরিবর্তিত) ...
 
 class ChoiceInline(nested_admin.NestedTabularInline):
     model = Choice
@@ -57,37 +56,24 @@ class MatchingGameInline(nested_admin.NestedStackedInline):
     class Media:
         js = ('api/admin_dynamic_forms.js',) 
 
-# --- নতুন: গ্রুপ ইনলাইন ও অ্যাডমিন ক্লাস ---
-class GroupMembershipInline(admin.TabularInline): 
-    model = GroupMembership
-    extra = 1
-    # ইউজারকে AutoComplete এর মাধ্যমে খুঁজে বের করার সুবিধা
-    autocomplete_fields = ['user'] 
-    fields = ('user', 'is_group_admin')
-    readonly_fields = ('user',)
 
-class LearningGroupAdmin(admin.ModelAdmin): 
-    # 'id' ফিল্ডটি list_display এ যোগ করা হলো
-    list_display = ('id', 'title', 'admin', 'created_at', 'get_member_count')
-    list_filter = ('admin',)
-    search_fields = ['title', 'admin__username']
-    filter_horizontal = ('courses',) 
+# --- নতুন: নোটিশ ও প্রমোশন অ্যাডমিন ক্লাস ---
+@admin.register(Notice)
+class NoticeAdmin(admin.ModelAdmin):
+    list_display = ('title', 'is_active', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('title', 'body')
     
-    inlines = [GroupMembershipInline]
-    
-    # 'id' ফিল্ডটি readonly_fields এ যোগ করা হলো
-    readonly_fields = ('admin', 'id') 
-    
-    def save_model(self, request, obj, form, change):
-        if not obj.pk:
-            obj.admin = request.user
-        super().save_model(request, obj, form, change)
+@admin.register(Promotion)
+class PromotionAdmin(admin.ModelAdmin):
+    list_display = ('title', 'course', 'is_active', 'created_at')
+    list_filter = ('is_active', 'course')
+    search_fields = ('title', 'subtitle')
+    autocomplete_fields = ['course']
+# ----------------------------------------
 
-    def get_member_count(self, obj):
-        return obj.memberships.count()
-    get_member_count.short_description = 'Members'
-    
-# --- ধাপ ২: প্রধান মডেল অ্যাডমিন (অপরিবর্তিত) ---
+
+# --- বাকি অ্যাডমিন ক্লাসগুলো (অপরিবর্তিত) ---
 
 class LessonAdmin(nested_admin.NestedModelAdmin): 
     model = Lesson
@@ -132,7 +118,6 @@ class UnitInline(nested_admin.NestedStackedInline):
     show_change_link = True 
     fields = ('title', 'order')
 
-# --- পরিবর্তন: CourseAdmin এবং CategoryAdmin (অপরিবর্তিত) ---
 class CourseAdmin(nested_admin.NestedModelAdmin): 
     model = Course
     inlines = [UnitInline] 
@@ -144,7 +129,33 @@ class CourseAdmin(nested_admin.NestedModelAdmin):
 class CategoryAdmin(admin.ModelAdmin): 
     search_fields = ['name'] 
 
-# --- ধাপ ৩: পুরনো অ্যাডমিন রেজিস্ট্রেশন মুছে নতুন দিয়ে রেজিস্টার করা ---
+# --- গ্রুপ অ্যাডমিন ক্লাস (অপরিবর্তিত) ---
+class GroupMembershipInline(admin.TabularInline): 
+    model = GroupMembership
+    extra = 1
+    autocomplete_fields = ['user'] 
+    fields = ('user', 'is_group_admin')
+    readonly_fields = ('user',)
+
+class LearningGroupAdmin(admin.ModelAdmin): 
+    list_display = ('id', 'title', 'admin', 'created_at', 'get_member_count')
+    list_filter = ('admin',)
+    search_fields = ['title', 'admin__username']
+    filter_horizontal = ('courses',) 
+    inlines = [GroupMembershipInline]
+    readonly_fields = ('admin', 'id')
+    
+    def save_model(self, request, obj, form, change):
+        if not obj.pk:
+            obj.admin = request.user
+        super().save_model(request, obj, form, change)
+
+    def get_member_count(self, obj):
+        return obj.memberships.count()
+    get_member_count.short_description = 'Members'
+
+
+# --- মডেল রেজিস্ট্রেশন ---
 try:
     admin.site.unregister(Category)
     admin.site.unregister(Course)
@@ -155,7 +166,6 @@ try:
     admin.site.unregister(Choice)
     admin.site.unregister(MatchingGame)
     admin.site.unregister(GamePair)
-    # --- নতুন: গ্রুপ মডেলগুলো আনরেজিস্টার (যদি থাকে) ---
     admin.site.unregister(LearningGroup)
     admin.site.unregister(GroupMembership)
 except admin.sites.NotRegistered:
@@ -172,9 +182,9 @@ admin.site.register(Choice)
 admin.site.register(MatchingGame)
 admin.site.register(GamePair)
 
-# --- নতুন: গ্রুপ মডেলগুলো রেজিস্টার ---
 admin.site.register(LearningGroup, LearningGroupAdmin)
 admin.site.register(GroupMembership)
+
 
 # --- ইউজার প্রোগ্রেস অ্যাডমিন (অপরিবর্তিত) ---
 @admin.register(UserLessonProgress)

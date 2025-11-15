@@ -5,7 +5,7 @@ import os
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-$%w)b1s!!q*i7e8t(4o06p=f13@x)2*5!9t)3@*v$!_g&g8@#c'
 DEBUG = True
-ALLOWED_HOSTS = ['192.168.0.200', '127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['192.168.0.198', '127.0.0.1', 'localhost']
 
 # config/settings.py (অংশ বিশেষ)
 # ...

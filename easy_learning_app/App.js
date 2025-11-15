@@ -5,7 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons'; // <-- আইকনের জন্য
+import { Ionicons } from '@expo/vector-icons'; 
 
 // AuthContext ইম্পোর্ট
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -25,20 +25,36 @@ import PaywallScreen from './screens/PaywallScreen';
 import WhatsappGuideScreen from './screens/WhatsappGuideScreen'; 
 import ProfileScreen from './screens/ProfileScreen'; 
 import MatchingGameScreen from './screens/MatchingGameScreen'; 
-// --- নতুন স্ক্রিন ইম্পোর্ট ---
 import GroupListScreen from './screens/GroupListScreen'; 
 import GroupDetailScreen from './screens/GroupDetailScreen';
 import CreateGroupScreen from './screens/CreateGroupScreen';
-import GroupJoinScreen from './screens/GroupJoinScreen'; // <-- নতুন ইমপোর্ট
+import GroupJoinScreen from './screens/GroupJoinScreen';
+// --- নতুন স্ক্রিন ইম্পোর্ট ---
+import LessonDetailScreen from './screens/LessonDetailScreen'; 
 // ----------------------------
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// --- MainAppStack (অপরিবর্তিত) ---
+// --- কালার প্যালেট (আপনার পছন্দের) ---
+const COLORS = {
+  primary: '#E07A5F', 
+  accent: '#3D405B', 
+  background: '#F4F1DE',
+  textLight: '#6B7280', 
+};
+// ---------------------------------
+
+// --- MainAppStack (LessonDetailScreen সহ আপডেট) ---
 function MainAppStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerLargeTitle: true }}>
+    <Stack.Navigator 
+        screenOptions={{ 
+            headerLargeTitle: true,
+            headerTintColor: COLORS.accent, // হেডার টেক্সট কালার
+            headerStyle: { backgroundColor: COLORS.background }, // হেডার ব্যাকগ্রাউন্ড
+        }}
+    >
       <Stack.Screen name="ExploreMain" component={ExploreScreen} options={{ title: 'Explore' }} />
       
       <Stack.Screen 
@@ -51,6 +67,15 @@ function MainAppStack() {
 
       <Stack.Screen name="CourseDetail" component={CourseDetailScreen} options={({ route }) => ({ title: route.params.courseTitle })} />
       <Stack.Screen name="UnitDetail" component={UnitDetailScreen} options={({ route }) => ({ title: route.params.unitTitle })} />
+      
+      {/* --- নতুন LessonDetailScreen যুক্ত করা হয়েছে --- */}
+      <Stack.Screen 
+        name="LessonDetail" 
+        component={LessonDetailScreen} 
+        options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} 
+      />
+      {/* ------------------------------------------------ */}
+
       <Stack.Screen name="LessonVideo" component={LessonVideoScreen} options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} />
       <Stack.Screen name="LessonArticle" component={LessonArticleScreen} options={({ route }) => ({ title: route.params.lessonTitle, headerLargeTitle: false })} />
       <Stack.Screen name="QuizScreen" component={QuizScreen} options={({ route }) => ({ title: route.params.quizTitle, headerLargeTitle: false })} />
@@ -76,33 +101,41 @@ function MainAppStack() {
   );
 }
 
-// --- GroupStack (সংশোধিত) ---
+// --- GroupStack (অপরিবর্তিত) ---
 function GroupStack() {
     return (
-        <Stack.Navigator screenOptions={{ headerLargeTitle: true }}>
+        <Stack.Navigator 
+            screenOptions={{ 
+                headerLargeTitle: true,
+                headerTintColor: COLORS.accent,
+                headerStyle: { backgroundColor: COLORS.background },
+            }}
+        >
             <Stack.Screen name="GroupListMain" component={GroupListScreen} options={{ title: 'Groups' }} />
             <Stack.Screen name="GroupDetail" component={GroupDetailScreen} options={({ route }) => ({ title: route.params.groupTitle })} />
             <Stack.Screen name="CreateGroup" component={CreateGroupScreen} options={{ title: 'Create New Group' }} />
-            {/* --- নতুন জয়েন স্ক্রিন যুক্ত করা হলো --- */}
             <Stack.Screen name="GroupJoin" component={GroupJoinScreen} options={{ title: 'Join Group' }} /> 
         </Stack.Navigator>
     );
 }
 // ----------------------------
 
-// --- HomeTabs (গ্রুপ স্ট্যাক সহ আপডেট) ---
+// --- HomeTabs (নতুন থিম কালার) ---
 function HomeTabs() {
   return (
     <Tab.Navigator 
       screenOptions={({ route }) => ({
         headerLargeTitle: true,
-        tabBarActiveTintColor: '#007bff', 
-        tabBarInactiveTintColor: 'gray',
+        headerTintColor: COLORS.accent, // হেডার টেক্সট কালার
+        headerStyle: { backgroundColor: COLORS.background }, // হেডার ব্যাকগ্রাউন্ড
+        tabBarActiveTintColor: COLORS.primary, // Coral
+        tabBarInactiveTintColor: COLORS.textLight, // Gray
+        tabBarStyle: { backgroundColor: COLORS.background, borderTopColor: COLORS.border }, // ট্যাব বার স্টাইল
         tabBarIcon: ({ focused, color, size }) => { 
           let iconName;
           if (route.name === 'Home') {
             iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'GroupsTab') { // <-- নতুন ট্যাব
+          } else if (route.name === 'GroupsTab') { 
             iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'ExploreStack') {
             iconName = focused ? 'search' : 'search-outline';
@@ -114,13 +147,11 @@ function HomeTabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} options={{ title: 'Home' }} />
-      {/* --- নতুন গ্রুপ ট্যাব --- */}
       <Tab.Screen 
         name="GroupsTab"
         component={GroupStack}
         options={{ title: 'Groups', headerShown: false }} 
       />
-      {/* ------------------------ */}
       <Tab.Screen 
         name="ExploreStack"
         component={MainAppStack}

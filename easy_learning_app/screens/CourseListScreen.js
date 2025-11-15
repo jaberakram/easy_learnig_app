@@ -1,14 +1,30 @@
 // screens/CourseListScreen.js
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // <-- SafeAreaView যোগ করা হয়েছে
 import { useNavigation, useFocusEffect } from '@react-navigation/native'; 
 import { useAuth } from '../context/AuthContext'; 
+import { Ionicons } from '@expo/vector-icons'; // <-- আইকন যোগ করা হয়েছে
+
+// --- কালার প্যালেট (আপনার পছন্দের) ---
+const COLORS = {
+  background: '#F4F1DE', // Light Cream/Beige
+  primary: '#E07A5F', // Coral/Burnt Orange (Button/CTA)
+  accent: '#3D405B', // Dark Navy Blue (Text, Headings)
+  progress: '#81B29A', // Muted Teal/Green (Progress Bar)
+  promoBg: '#F2CC8F', // Muted Gold/Mustard
+  
+  text: '#3D405B', 
+  textLight: '#6B7280', 
+  white: '#FFFFFF', 
+  border: '#D1C8B4', 
+  disabled: '#A5A6A2', 
+};
+// ------------------------------------------
+
 
 export default function CourseListScreen({ route }) {
-  // --- পরিবর্তন: categoryId এবং searchTerm দুটিই রিসিভ করুন ---
-  const { categoryId, searchTerm } = route.params;
-  // --------------------------------------------------------
-
+  const { categoryId, searchTerm, categoryName, searchTitle } = route.params || {};
   const navigation = useNavigation();
   const { userToken, API_URL_BASE } = useAuth(); 
 
@@ -16,20 +32,18 @@ export default function CourseListScreen({ route }) {
   const [courses, setCourses] = useState([]);
   const [error, setError] = useState(null);
 
-  // --- পরিবর্তন: এই ফাংশনটি এখন সার্চ এবং ক্যাটাগরি দুটোই হ্যান্ডেল করে ---
-  const fetchCourses = async () => {
+  // --- fetchCourses কে useCallback এ মোড়ানো হয়েছে ---
+  const fetchCourses = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      setCourses([]); // ডেটা আনার আগে লিস্ট খালি করুন
+      setCourses([]); 
 
       let url = `${API_URL_BASE}/api/courses/`;
 
       if (categoryId) {
-        // যদি ক্যাটাগরি থেকে আসে
         url += `?category=${categoryId}`;
       } else if (searchTerm) {
-        // যদি সার্চ বার থেকে আসে
         url += `?search=${encodeURIComponent(searchTerm)}`;
       }
       
@@ -49,29 +63,27 @@ export default function CourseListScreen({ route }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [categoryId, searchTerm, userToken, API_URL_BASE]); // <-- ডিপেন্ডেন্সি ঠিক করা হয়েছে
 
-  // --- পরিবর্তন: useCallback-এর ডিপেন্ডেন্সি আপডেট করা হয়েছে ---
   useFocusEffect(
     useCallback(() => {
+      // হেডার টাইটেল সেট করা
+      navigation.setOptions({ 
+        title: categoryName || searchTitle || 'Courses' 
+      });
       fetchCourses();
-    }, [categoryId, searchTerm, userToken, API_URL_BASE]) // <-- searchTerm যোগ করা হয়েছে
+    }, [fetchCourses, navigation, categoryName, searchTitle])
   );
-  // ---------------------------------------------------------
 
-  if (loading) {
-    return <ActivityIndicator style={styles.loader} size="large" color="#0000ff" />;
-  }
-
-  if (error) {
+  if (loading && courses.length === 0) {
     return (
-      <View style={styles.loader}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
+      <SafeAreaView style={styles.loaderContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+      </SafeAreaView>
     );
   }
 
-  // --- কার্ড রেন্ডার করার ফাংশন (অপরিবর্তিত) ---
+  // --- কার্ড রেন্ডার করার ফাংশন (UI/UX রি-ডিজাইন) ---
   const renderCourseCard = ({ item }) => {
     const earned = item.user_earned_points || 0;
     const total = item.total_possible_points || 0;
@@ -80,7 +92,9 @@ export default function CourseListScreen({ route }) {
       percentage = (earned / total) * 100;
     }
 
-    const isLocked = item.is_premium && !item.is_enrolled;
+    const isEnrolled = item.is_enrolled;
+    const isLocked = item.is_premium && !isEnrolled;
+    const isCompleted = isEnrolled && percentage >= 100;
 
     return (
       <TouchableOpacity 
@@ -99,103 +113,203 @@ export default function CourseListScreen({ route }) {
           }
         }}
       >
-        <View style={styles.titleContainer}>
-          {isLocked && <Text style={styles.lockIcon}>🔒 </Text>}
-          <Text style={styles.cardTitle}>{item.title}</Text>
+        {/* প্রিমিয়াম ট্যাগ */}
+        {item.is_premium && (
+            <View style={[styles.premiumTag, isLocked && styles.lockedTag]}>
+                <Ionicons name={isLocked ? "lock-closed" : "shield-checkmark"} size={12} color={isLocked ? COLORS.white : COLORS.accent} />
+                <Text style={[styles.premiumText, isLocked && styles.lockedText]}>
+                    {isLocked ? "Premium" : "Enrolled"}
+                </Text>
+            </View>
+        )}
+        
+        <View style={styles.contentWrapper}>
+            <View style={styles.textContainer}>
+                <Text style={styles.cardTitle}>{item.title}</Text>
+                <Text style={styles.cardDescription} numberOfLines={2}>{item.description}</Text>
+            </View>
+
+            {/* স্ট্যাটাস/প্রোগ্রেস সেকশন */}
+            <View style={styles.statusContainer}>
+                {isEnrolled ? (
+                    // এনরোল করা থাকলে প্রোগ্রেস বার
+                    <>
+                        <Text style={[styles.statusText, isCompleted && styles.completedText]}>
+                            {isCompleted ? "Completed" : "In Progress"}
+                        </Text>
+                        <View style={styles.progressOuter}>
+                            <View style={[styles.progressInner, { width: `${percentage}%` }, isCompleted && styles.progressCompleted]} />
+                        </View>
+                        <Text style={styles.pointsText}>{earned} / {total} Points</Text>
+                    </>
+                ) : (
+                    // এনরোল করা না থাকলে বাটন
+                    <View style={[styles.enrollButton, isLocked && styles.enrollButtonPremium]}>
+                        <Text style={[styles.enrollButtonText, isLocked && styles.enrollButtonPremiumText]}>
+                            {isLocked ? "Enroll Now" : "Start Free"}
+                        </Text>
+                    </View>
+                )}
+            </View>
         </View>
 
-        <Text style={styles.cardDescription}>{item.description}</Text>
-        
-        {total > 0 ? (
-          <View style={styles.progressContainer}>
-            <Text style={styles.progressText}>{earned} / {total} Points ({percentage.toFixed(0)}%)</Text>
-            <View style={styles.progressOuter}>
-              <View style={[styles.progressInner, { width: `${percentage}%` }]} />
-            </View>
-          </View>
-        ) : (
-          <Text style={styles.progressText}>এই কোর্সে কোনো পয়েন্ট নেই।</Text>
-        )}
       </TouchableOpacity>
     );
   };
 
   return (
-    <View style={styles.container}>
-      {/* --- পরিবর্তন: এম্পটি মেসেজ আপডেট করা হয়েছে --- */}
-      {courses.length === 0 && (
-        <Text style={styles.errorText}>
-          {searchTerm ? 'আপনার সার্চের সাথে কোনো কোর্স পাওয়া যায়নি।' : 'এই ক্যাটাগরিতে এখনো কোনো কোর্স যোগ করা হয়নি।'}
-        </Text>
-      )}
-      {/* ------------------------------------------- */}
+    <SafeAreaView style={styles.safeArea}>
       <FlatList
         data={courses}
         keyExtractor={(item) => item.id.toString()}
         renderItem={renderCourseCard} 
+        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+            <Text style={styles.errorText}>
+                {searchTerm ? 'আপনার সার্চের সাথে কোনো কোর্স পাওয়া যায়নি।' : 'এই ক্যাটাগরিতে এখনো কোনো কোর্স যোগ করা হয়নি।'}
+            </Text>
+        }
+        refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={fetchCourses} colors={[COLORS.primary]} />
+        }
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
-// --- স্টাইল (অপরিবর্তিত) ---
+// --- স্টাইল (নতুন প্যালেট এবং UI) ---
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    padding: 10,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.background,
   },
-  loader: {
+  loaderContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: COLORS.background,
   },
   errorText: {
-    color: 'gray',
+    color: COLORS.textLight,
     textAlign: 'center',
     marginTop: 50,
     fontSize: 16,
   },
+  listContainer: {
+    padding: 15,
+  },
   card: {
-    backgroundColor: '#ffffff',
-    padding: 20,
-    marginBottom: 10,
+    backgroundColor: COLORS.white,
+    padding: 15,
+    marginBottom: 15,
     borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 3,
   },
-  titleContainer: {
+  contentWrapper: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 5, // প্রিমিয়াম ট্যাগের জন্য জায়গা
   },
-  lockIcon: {
-    fontSize: 18,
+  textContainer: {
+    flex: 1,
+    marginRight: 10,
   },
   cardTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    flex: 1, 
+    color: COLORS.accent, // Dark Navy
   },
   cardDescription: {
     fontSize: 14,
-    color: '#555',
+    color: COLORS.textLight,
     marginTop: 5,
   },
-  progressContainer: { 
-    marginTop: 15 
+  // --- প্রিমিয়াম ট্যাগ ---
+  premiumTag: {
+    position: 'absolute',
+    top: -1,
+    right: -1,
+    backgroundColor: COLORS.promoBg, // Muted Gold
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderTopRightRadius: 10,
+    borderBottomLeftRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
   },
-  progressText: { 
-    fontSize: 12, 
-    color: '#555', 
-    marginBottom: 3 
+  premiumText: {
+    color: COLORS.accent,
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+  lockedTag: {
+    backgroundColor: COLORS.primary, // Coral
+  },
+  lockedText: {
+    color: COLORS.white,
+  },
+  // --- স্ট্যাটাস সেকশন ---
+  statusContainer: {
+    width: 90, // একটি নির্দিষ্ট প্রস্থ
+    alignItems: 'center',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: COLORS.textLight,
+    marginBottom: 4,
+  },
+  completedText: {
+    color: COLORS.progress, // Muted Green
   },
   progressOuter: { 
-    height: 8, 
-    backgroundColor: '#e0e0e0', 
-    borderRadius: 4 
+    height: 6, 
+    width: '100%',
+    backgroundColor: COLORS.border, 
+    borderRadius: 3 
   },
   progressInner: { 
     height: '100%', 
-    backgroundColor: '#007bff', 
-    borderRadius: 4 
+    backgroundColor: COLORS.progress, // Muted Green
+    borderRadius: 3 
+  },
+  progressCompleted: {
+      backgroundColor: COLORS.progress, // Muted Green
+  },
+  pointsText: {
+    fontSize: 11,
+    color: COLORS.textLight,
+    marginTop: 4,
+  },
+  // --- এনরোল বাটন (যখন প্রোগ্রেস বার নেই) ---
+  enrollButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary + '30', // হালকা Coral
+    borderWidth: 1,
+    borderColor: COLORS.primary, // Coral Border
+  },
+  enrollButtonText: {
+    color: COLORS.primary,
+    fontWeight: 'bold',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  enrollButtonPremium: {
+    backgroundColor: COLORS.promoBg,
+    borderColor: COLORS.promoBg,
+  },
+  enrollButtonPremiumText: {
+    color: COLORS.accent,
   },
 });
