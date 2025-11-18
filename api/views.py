@@ -31,13 +31,31 @@ from .serializers import (
     MatchingGameSerializer
 )
 
-# --- Google Login View ---
+#
+# api/views.py
+
+# ... অন্যান্য ইম্পোর্ট ...
+from rest_framework.response import Response
+from rest_framework import status
+from dj_rest_auth.registration.views import SocialLoginView
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+
 class GoogleLogin(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter
-    # এই URL টি Google Console এ যা দিয়েছিলেন হুবহু তাই
-    callback_url = "http://localhost:8000/accounts/google/login/callback/"
-    client_class = OAuth2Client
+    # client_class = OAuth2Client  <-- এই লাইনটি যেন অবশ্যই মুছে ফেলা বা কমেন্ট করা থাকে
+    # callback_url = "..."         <-- এটিও মুছে ফেলুন
 
+    def post(self, request, *args, **kwargs):
+        print("--- Google Login Debug Start ---")
+        print("Received Data from App:", request.data) # অ্যাপ থেকে কী ডাটা আসছে তা দেখাবে
+        
+        serializer = self.get_serializer(data=request.data)
+        if not serializer.is_valid():
+            print("Validation Errors:", serializer.errors) # কেন রিজেক্ট হচ্ছে তা দেখাবে
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        print("Serializer is valid, proceeding...")
+        return super().post(request, *args, **kwargs)
 # --- অথেন্টিকেশন ভিউ ---
 @api_view(['POST'])
 @permission_classes([AllowAny])

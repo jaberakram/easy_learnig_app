@@ -169,3 +169,15 @@ SOCIALACCOUNT_PROVIDERS = {
         'AUTH_PARAMS': {'access_type': 'online'},
     }
 }
+
+# config/settings.py
+
+# ... আগের কোড ...
+
+# --- Social Account Settings ---
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_EMAIL_VERIFICATION = 'none'
+
+# যদি আগে থেকেই একই ইমেইল দিয়ে একাউন্ট থাকে, তবে গুগলের সাথে অটো কানেক্ট করবে
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = True
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = True

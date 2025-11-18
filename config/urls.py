@@ -1,21 +1,3 @@
-"""
-URL configuration for config project.
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/5.2/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
-
-
 # config/urls.py
 
 from django.contrib import admin
@@ -30,12 +12,13 @@ urlpatterns = [
     # --- আমাদের অ্যাপের API ---
     path('api/', include('api.urls')),
 
-    # --- নতুন: ইউজার Auth API (ধাপ ৫৫) ---
-    # /api/auth/login/ , /api/auth/logout/ ইত্যাদি URL এখানে থাকবে
+    # --- Auth API ---
     path('api/auth/', include('dj_rest_auth.urls')),
     
-    # /api/auth/registration/ URL এখানে থাকবে
-    #path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+    # (Optional) রেজিস্ট্রেশন এনপয়েন্ট যদি লাগে, তবে আনকমেন্ট করতে পারেন
+    # path('api/auth/registration/', include('dj_rest_auth.registration.urls')),
+
+    # --- FIX: এই লাইনটি যোগ করুন ---
+    # allauth এর ইন্টারনাল URL (যেমন: socialaccount_signup) চেনার জন্য এটি জরুরি
+    path('accounts/', include('allauth.urls')),
 ]
-
-
