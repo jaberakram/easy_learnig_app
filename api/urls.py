@@ -4,10 +4,11 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     CategoryViewSet, CourseViewSet, UnitViewSet, LessonViewSet, QuizViewSet,
     register_user, login_user, logout_user, 
-    UserQuizAttemptView, # <-- UserLessonProgressView ইম্পোর্ট সরানো হয়েছে
+    UserQuizAttemptView,
     ProfileView, LearningGroupViewSet, GroupLeaderboardView,
     DashboardView,
-    MatchingGameViewSet
+    MatchingGameViewSet,
+    GoogleLogin # নতুন ইম্পোর্ট
 )
 
 router = DefaultRouter()
@@ -28,6 +29,9 @@ urlpatterns = [
     path('login/', login_user, name='login'),
     path('logout/', logout_user, name='logout'),
     
+    # Google Login
+    path('auth/google/', GoogleLogin.as_view(), name='google_login'),
+    
     # Profile
     path('profile/', ProfileView.as_view(), name='profile'),
     
@@ -35,7 +39,6 @@ urlpatterns = [
     path('dashboard/', DashboardView.as_view(), name='dashboard'),
     
     # User Progress
-    # --- path('progress/lesson/...) লাইনটি মুছে ফেলা হয়েছে ---
     path('progress/quiz/', UserQuizAttemptView.as_view(), name='progress-quiz'),
     
     # Group extras

@@ -1,4 +1,10 @@
-# config/settings.py
+
+# config/settings.py (Updated with 'django.contrib.sites')
+import os
+from dotenv import load_dotenv
+
+load_dotenv() # এটি .env ফাইল থেকে ভেরিয়েবলগুলো লোড করবে
+
 from pathlib import Path
 import os
 
@@ -7,8 +13,6 @@ SECRET_KEY = 'django-insecure-$%w)b1s!!q*i7e8t(4o06p=f13@x)2*5!9t)3@*v$!_g&g8@#c
 DEBUG = True
 ALLOWED_HOSTS = ['192.168.0.198', '127.0.0.1', 'localhost']
 
-# config/settings.py (অংশ বিশেষ)
-# ...
 INSTALLED_APPS = [
     'nested_admin',
     'django.contrib.admin',
@@ -17,6 +21,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',  # <-- এটি যোগ করা হয়েছে
     
     # থার্ড পার্টি অ্যাপস
     'rest_framework',
@@ -24,19 +29,18 @@ INSTALLED_APPS = [
     'corsheaders', 
     'django_filters',
     'django_ckeditor_5',
+    
+    # Auth Apps
     'allauth',
     'allauth.account',
-    # 'allauth.socialaccount', # <-- এই লাইনটি মুছে ফেলা হয়েছে
-    # 'allauth.socialaccount.providers.google', # <-- এই লাইনটি মুছে ফেলা হয়েছে
+    'allauth.socialaccount', 
+    'allauth.socialaccount.providers.google', 
     'dj_rest_auth',
     'dj_rest_auth.registration',
 
     # লোকাল অ্যাপস
     'api',
 ]
-# ...
-# SOCIALACCOUNT_PROVIDERS এবং REST_AUTH এর ভেতরের Social Login-এর কোড মুছে ফেলুন
-# ...
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -96,16 +100,15 @@ USE_TZ = True
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "static"
 
-# জাভাস্ক্রিপ্ট ফাইল পরিবেশন করার জন্য
 STATICFILES_DIRS = [
-    BASE_DIR / "api" / "static", # <-- এই ফোল্ডারটি আমরা পরের ধাপে তৈরি করবো
+    BASE_DIR / "api" / "static", 
 ]
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CKEditor 5 সেটিংস (অপরিবর্তিত)
+# CKEditor 5 সেটিংস
 customColorPalette = [
     {"color": "hsl(4, 90%, 58%)", "label": "Red"},
     {"color": "hsl(340, 82%, 52%)", "label": "Pink"},
@@ -140,7 +143,6 @@ REST_FRAMEWORK = {
     ],
 }
 
-# 'allauth' এবং 'dj-rest-auth' সেটিংস
 AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
     'allauth.account.auth_backends.AuthenticationBackend',
@@ -148,12 +150,22 @@ AUTHENTICATION_BACKENDS = [
 
 SITE_ID = 1 
 
-# --- পরিবর্তন: 'password' কে 'password1' করা হয়েছে ---
 ACCOUNT_LOGIN_METHODS = ['email'] 
-ACCOUNT_SIGNUP_FIELDS = ['email', 'password1'] # <-- (CRITICAL) এই লাইনটি ঠিক করা হয়েছে
+ACCOUNT_SIGNUP_FIELDS = ['email', 'password1'] 
 ACCOUNT_EMAIL_VERIFICATION = 'none' 
-# -----------------------------------------------
 
 REST_AUTH = {
     'SOCIAL_LOGIN_ADAPTER': 'allauth.socialaccount.adapter.DefaultSocialAccountAdapter'
+}
+
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'client_id': os.getenv('GOOGLE_CLIENT_ID'),
+            'secret': os.getenv('GOOGLE_CLIENT_SECRET'),
+            'key': ''
+        },
+        'SCOPE': ['profile', 'email'],
+        'AUTH_PARAMS': {'access_type': 'online'},
+    }
 }

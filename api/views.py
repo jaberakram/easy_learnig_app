@@ -11,6 +11,11 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
+# Google Login Imports
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from dj_rest_auth.registration.views import SocialLoginView
+
 from .models import (
     Category, Course, Unit, Lesson, Quiz, Question, 
     UserQuizAttempt, UserEnrollment,
@@ -25,6 +30,13 @@ from .serializers import (
     LeaderboardEntrySerializer, DashboardSerializer, NoticeSerializer, PromotionSerializer,
     MatchingGameSerializer
 )
+
+# --- Google Login View ---
+class GoogleLogin(SocialLoginView):
+    adapter_class = GoogleOAuth2Adapter
+    # এই URL টি Google Console এ যা দিয়েছিলেন হুবহু তাই
+    callback_url = "http://localhost:8000/accounts/google/login/callback/"
+    client_class = OAuth2Client
 
 # --- অথেন্টিকেশন ভিউ ---
 @api_view(['POST'])
@@ -167,7 +179,7 @@ class UserQuizAttemptView(generics.CreateAPIView):
         UserQuizAttempt.objects.filter(user=user, quiz=quiz).delete()
         UserQuizAttempt.objects.create(user=user, quiz=quiz, score=score, total_points=total_points)
 
-# --- গ্রুপ ভিউসেট (বাগ ফিক্সড) ---
+# --- গ্রুপ ভিউসেট ---
 class LearningGroupViewSet(viewsets.ModelViewSet):
     queryset = LearningGroup.objects.all()
     serializer_class = LearningGroupSerializer
@@ -177,10 +189,7 @@ class LearningGroupViewSet(viewsets.ModelViewSet):
         return {'request': self.request}
 
     def get_queryset(self):
-        # --- পরিবর্তন: 'memberships__user' এর বদলে 'learning_groups' ---
-        # (api/models.py অনুযায়ী User মডেলে related_name 'learning_groups' দেওয়া আছে)
         return LearningGroup.objects.filter(memberships__user=self.request.user)
-        # --------------------------------------------------------
 
     @action(detail=True, methods=['post'], url_path='join')
     def join_group(self, request, pk=None):
@@ -224,7 +233,7 @@ class LearningGroupViewSet(viewsets.ModelViewSet):
         serializer = GroupMembershipSerializer(members, many=True)
         return Response(serializer.data)
 
-# --- গ্রুপ লিডারবোর্ড (বাগ ফিক্সড) ---
+# --- গ্রুপ লিডারবোর্ড ---
 class GroupLeaderboardView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -238,31 +247,28 @@ class GroupLeaderboardView(APIView):
         if not group_courses.exists():
             return Response([], status=status.HTTP_200_OK) 
 
-        # --- পরিবর্তন: 'learning_groups' related_name ব্যবহার করা হয়েছে ---
         members = User.objects.filter(learning_groups__group=group)
         
         lesson_quizzes_q = Q(quiz__lesson__unit__course__in=group_courses)
         unit_quizzes_q = Q(quiz__unit__course__in=group_courses)
 
-        # --- পরিবর্তন: কোয়েরিটি সঠিকভাবে লেখা হয়েছে (আগের ২৪৬ লাইনের एरর ফিক্স) ---
         leaderboard_data = UserQuizAttempt.objects.filter(
             user__in=members
         ).filter(
             lesson_quizzes_q | unit_quizzes_q
         ).values(
-            'user__username' # ইউজারনেম দিয়ে গ্রুপ করা
+            'user__username' 
         ).annotate(
-            total_score=Sum('score'), # মোট স্কোর যোগ করা
-            username=F('user__username') # সিরিয়ালাইজারের জন্য 'username' ফিল্ড তৈরি
+            total_score=Sum('score'), 
+            username=F('user__username') 
         ).filter(
-            total_score__gt=0 # যাদের স্কোর ০ এর বেশি
+            total_score__gt=0 
         ).annotate(
-            rank=Window( # গ্রুপ করা ফলাফলের উপর র‍্যাঙ্ক করা
+            rank=Window( 
                 expression=Rank(),
                 order_by=F('total_score').desc()
             )
-        ).order_by('rank') # র‍্যাঙ্ক অনুযায়ী সাজানো
-        # --------------------------------------------------------
+        ).order_by('rank') 
         
         serializer = LeaderboardEntrySerializer(leaderboard_data, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

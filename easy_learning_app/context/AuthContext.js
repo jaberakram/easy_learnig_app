@@ -55,7 +55,35 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // --- পরিবর্তন: 'googleLogin' ফাংশনটি মুছে ফেলা হয়েছে ---
+  // --- Google Login (Backend Verification) ---
+  const googleLoginBackend = async (accessToken) => {
+    try {
+      console.log("Sending token to backend:", accessToken);
+      const response = await fetch(`${API_URL_BASE}/api/auth/google/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          access_token: accessToken,
+        }),
+      });
+
+      const json = await response.json();
+      console.log("Backend response:", json);
+      
+      if (response.ok) {
+        const token = json.key;
+        setUserToken(token);
+        await AsyncStorage.setItem('userToken', token);
+      } else {
+        Alert.alert('লগইন ব্যর্থ', 'গুগল ভেরিফিকেশন সমস্যা।');
+      }
+    } catch (e) {
+      console.error('Google Login Error', e);
+      Alert.alert('ত্রুটি', 'সার্ভারে সংযোগ করা যাচ্ছে না।');
+    }
+  };
 
   const logout = async () => {
     try {
@@ -92,7 +120,7 @@ export const AuthProvider = ({ children }) => {
       login, 
       logout, 
       register,
-      // --- 'googleLogin' মুছে ফেলা হয়েছে ---
+      googleLoginBackend, // এক্সপোর্ট করা হলো
       userToken,
       isLoading,
       API_URL_BASE
